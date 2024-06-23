@@ -1,7 +1,6 @@
 {
   "extends": "./node_modules/gts/tsconfig-google.json",
-  "include": ["NetscriptDefinitions.d.ts", "src/**/*"],
-  "exclude": ["src/lib/react.ts"],
+  "include": ["src/**/*"],
   "compilerOptions": {
     // gts override - Bitburner supports ES6 modules, and I prefer the simpler
     // emitted ES6 over the emitted CommonJS.
