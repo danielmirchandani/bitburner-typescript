@@ -1,25 +1,29 @@
 {
+  "extends": "./node_modules/gts/tsconfig-google.json",
   "include": ["NetscriptDefinitions.d.ts", "src/**/*"],
   "exclude": ["src/lib/react.ts"],
   "compilerOptions": {
-    "module": "esnext",
-    "target": "esnext",
-    "moduleResolution": "node",
-    "noImplicitReturns": true,
+    // gts override - Bitburner supports ES6 modules, and I prefer the simpler
+    // emitted ES6 over the emitted CommonJS.
+    "module": "node16",
+    // gts override - "DOM" provides types for `window`, and NS2 scripts can use
+    // React via `window.React`.
+    "lib": ["DOM", "es2018"],
     "noImplicitThis": true,
-    "esModuleInterop": true,
+    // gts override - Bitburner doesn't understand TypeScript natively.
+    "declaration": false,
     "inlineSourceMap": true,
     "inlineSources": true,
-    "strict": true,
+    // gts override - Bitburner blocks uploading ".map" files and I'm not sure
+    // Chrome's debugger could see them anyway; use `inlineSourceMap` instead.
+    "sourceMap": false,
     "rootDir": "src/",
     "outDir": "dist/",
-    "baseUrl": "src/",
     "allowJs": true,
     "jsx": "react",
-    "paths": {
-      "/*": ["*"],
-      "@ns": ["../NetscriptDefinitions.d.ts"],
-      "@react": ["lib/react.ts"]
-    }
+    // NS2 imports relative to the server's root directory, regardless of the
+    // script's path, but we could hack around that limit with `paths`. I choose
+    // simpler import reasoning over having that ability, though.
+    "paths": {}
   }
 }

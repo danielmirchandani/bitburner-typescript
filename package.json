@@ -1,7 +1,19 @@
 {
   "name": "bitburner-typescript-template",
   "version": "2.0.0",
+  "files": [
+    "src/"
+  ],
+  "private": true,
+  "type": "module",
   "scripts": {
+    "clean": "gts clean",
+    "compile": "tsc",
+    "fix": "gts fix",
+    "lint": "gts lint",
+    "prepare": "npm.cmd run compile",
+    "pretest": "npm.cmd run compile",
+    "posttest": "npm.cmd run lint",
     "watch:transpile": "tsc -w --preserveWatchOutput",
     "watch:local": "node build/watch.js",
     "watch:remote": "bitburner-filesync",
@@ -13,14 +25,12 @@
   "devDependencies": {
     "@types/react": "^18.2.18",
     "@types/react-dom": "^18.2.7",
-    "@typescript-eslint/eslint-plugin": "^5.35.1",
-    "@typescript-eslint/parser": "^5.35.1",
     "bitburner-filesync": "^1.1.5",
     "chokidar": "^3.5.3",
     "concurrently": "^7.4.0",
-    "eslint": "^8.22.0",
     "fast-glob": "^3.2.12",
+    "gts": "^5.3.1",
     "sync-directory": "^5.1.7",
-    "typescript": "^4.7.4"
+    "typescript": "^5.4.3"
   }
 }
