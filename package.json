@@ -14,6 +14,7 @@
     "prepare": "npm.cmd run compile",
     "pretest": "npm.cmd run compile",
     "posttest": "npm.cmd run lint",
+    "test": "node --experimental-vm-modules node_modules/jest-cli/bin/jest.js",
     "watch:transpile": "tsc -w --preserveWatchOutput",
     "watch:local": "node build/watch.js",
     "watch:remote": "bitburner-filesync",
@@ -30,7 +31,11 @@
     "concurrently": "^7.4.0",
     "fast-glob": "^3.2.12",
     "gts": "^5.3.1",
+    "jest-cli": "^29.7.0",
     "sync-directory": "^5.1.7",
     "typescript": "^5.4.3"
+  },
+  "dependencies": {
+    "@jest/globals": "^29.7.0"
   }
 }
