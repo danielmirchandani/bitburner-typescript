@@ -3,7 +3,7 @@ const path = require('node:path');
 const syncDirectory = require('sync-directory');
 const fg = require('fast-glob');
 const chokidar = require('chokidar');
-const { src, dist, allowedFiletypes } = require('./config');
+const {src, dist, allowedFiletypes} = require('./config.cjs');
 
 /** Format dist path for printing */
 function normalize(p) {
@@ -16,8 +16,8 @@ function normalize(p) {
  */
 async function syncStatic() {
   return syncDirectory.async(path.resolve(src), path.resolve(dist), {
-    exclude: (file) => {
-      const { ext } = path.parse(file);
+    exclude: file => {
+      const {ext} = path.parse(file);
       return ext && !allowedFiletypes.includes(ext);
     },
     async afterEachSync(event) {
@@ -67,7 +67,7 @@ async function initTypeScript() {
  * Watch phase only.
  */
 async function watchTypeScript() {
-  chokidar.watch(`${src}/**/*.ts`).on('unlink', async (p) => {
+  chokidar.watch(`${src}/**/*.ts`).on('unlink', async p => {
     // called on *.ts file get deleted
     const relative = path.relative(src, p).replace(/\.ts$/, '.js');
     const distFile = path.resolve(dist, relative);
