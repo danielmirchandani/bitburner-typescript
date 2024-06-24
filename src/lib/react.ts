@@ -1,8 +1,15 @@
-import ReactNamespace from 'react';
-import ReactDomNamespace from 'react-dom';
+import type ReactNamespace from 'react';
+import type ReactDomNamespace from 'react-dom';
 
-const React = window.React as typeof ReactNamespace;
-const ReactDOM = window.ReactDOM as typeof ReactDomNamespace;
+declare global {
+  interface Window {
+    React: typeof ReactNamespace;
+    ReactDOM: typeof ReactDomNamespace;
+  }
+}
+
+const React = window.React;
+const ReactDOM = window.ReactDOM;
 
 export default React;
 export {ReactDOM};
