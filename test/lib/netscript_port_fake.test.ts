@@ -1,5 +1,5 @@
-import {expect, test} from '@jest/globals';
-import NetscriptPortFake from '../../dist/lib/netscript_port_fake.js';
+import {expect, test} from 'vitest';
+import NetscriptPortFake from '../../src/lib/netscript_port_fake.js';
 
 test('new is empty', () => {
   const port = new NetscriptPortFake(-1);

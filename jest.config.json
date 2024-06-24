@@ -1,5 +1,0 @@
-{
-  "coverageDirectory": "coverage/",
-  "coverageProvider": "v8",
-  "roots": ["test/"]
-}
