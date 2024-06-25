@@ -657,33 +657,36 @@ function rootServers(ns: NS, player: Player, servers: Required<Server>[]) {
     if (server.maxRam === 0) {
       continue;
     }
-    if (server.numOpenPortsRequired >= PORTS.length) {
-      throw new Error(
-        `"${server.hostname}" requires ${server.numOpenPortsRequired} open ports`
-      );
-    }
-    if (server.requiredHackingSkill > player.skills.hacking) {
-      continue;
-    }
-    let anyClosed = false;
-    for (let i = server.numOpenPortsRequired; i >= 0; --i) {
-      const port = PORTS[i];
-      if (port.isOpen(server)) {
+    // This is not a useless check. Purchased servers start with admin access,
+    // even though the required number of ports aren't open (and might not be
+    // able to for a while).
+    if (!server.hasAdminRights) {
+      if (server.numOpenPortsRequired >= PORTS.length) {
+        throw new Error(
+          `"${server.hostname}" requires ${server.numOpenPortsRequired} open ports`
+        );
+      }
+      if (server.requiredHackingSkill > player.skills.hacking) {
         continue;
       }
-      if (!ns.fileExists(port.file)) {
-        anyClosed = true;
-        break;
+      let anyClosed = false;
+      for (let i = server.numOpenPortsRequired; i >= 0; --i) {
+        const port = PORTS[i];
+        if (port.isOpen(server)) {
+          continue;
+        }
+        if (!ns.fileExists(port.file)) {
+          anyClosed = true;
+          break;
+        }
+        port.getOpener(ns)(server.hostname);
       }
-      port.getOpener(ns)(server.hostname);
+      if (anyClosed) {
+        continue;
+      }
+      server.hasAdminRights = true;
     }
-    if (anyClosed) {
-      continue;
-    }
-    server.hasAdminRights = true;
-    for (const server of servers) {
-      ns.scp(files, server.hostname);
-    }
+    ns.scp(files, server.hostname);
     hosts.push(Host.fromServer(ns, server));
   }
   return hosts.sort((a, b) => {
