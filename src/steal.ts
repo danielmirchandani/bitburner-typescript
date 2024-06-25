@@ -880,7 +880,10 @@ export const main = dan.main.bind(null, async (ns: NS, flags: dan.Flags) => {
   const ramAfterPlan = plan.getRamAvailable();
   ns.tprint(`INFO ${ns.formatRam(ramAfterPlan)} RAM left, sharing`);
 
-  const durationMax = Math.max(...plan.scripts.map(script => script.duration));
+  const durationMax = plan.scripts.reduce(
+    (max, current) => Math.max(max, current.duration),
+    0
+  );
   const pIdsPlan: number[] = [];
   const stopwatchExec = new dan.Stopwatch(ns);
   let lastPrint = performance.now();
