@@ -498,32 +498,28 @@ export function planHWGW(
   return plan;
 }
 
+/**
+ * Figure out the "ideal" number of hacks per HWGW batch.
+ *
+ * In reality, batches don't use the same RAM because, even for the same number
+ * of hacks, grows increase as the hosts they're split between increase. The
+ * slight loss in efficiency per batch (~10%) is more than made up for by
+ * planning _far_ more batches (10x for me) in the same amount of planning time.
+ */
 async function planHacksPerBatch(ns: NS, plan: PlanConst) {
   // Any threads beyond this will have no money to steal, so efficiency only
   // goes down after this.
   const limit = Math.floor(1 / plan.multiplierHack);
+  if (limit > 1_000_000) {
+    return -1;
+  }
   const ramToStart = plan.getRamAvailable();
   const bestHost = plan.hosts[plan.hosts.length - 1];
   const worstHost = plan.hosts[0];
 
-  // The actual RAM use of some hacks amount is usually more than this as the
-  // required grows amount usually can't fit on one server, but it takes too
-  // much time to find the real most efficient hacks amount for every batch,
-  // so let's figure out the most efficient hacks amount assuming "ideal"
-  // conditions and just try to fit as many batches of that hacks amount as we
-  // can. We make up for the loss of efficiency with being able to run far
-  // more batches in the same amount of planning time.
   let bestEfficiency = 0;
-  let bestHacks = 0;
-  let lastSleep = performance.now();
+  let bestHacks = -1;
   for (let i = 1; i <= limit; ++i) {
-    // This loop is far-and-away the most demanding in the script, so
-    // let's make sure we don't lock up the UI.
-    if (performance.now() > lastSleep + 20) {
-      await ns.sleep(0);
-      lastSleep = performance.now();
-    }
-
     const weakensHack = Math.ceil(WEAKENS_PER_HACK * i);
     const grows = plan.growThreads(ns, worstHost);
     const weakensGrow = Math.ceil(WEAKENS_PER_GROW * grows);
@@ -533,7 +529,7 @@ async function planHacksPerBatch(ns: NS, plan: PlanConst) {
       grows * worstHost.getScriptRam(ns, 'grow.js') +
       weakensGrow * bestHost.getScriptRam(ns, 'weaken.js');
 
-    // Scripts dont pack 100% effectively, so arbitrarily say 50% of total
+    // Scripts don't pack 100% effectively, so arbitrarily say 50% of total
     // host RAM is the threshold for too-big batches.
     if (ramLowerBound > ramToStart / 2) {
       continue;
@@ -848,16 +844,12 @@ export const main = dan.main.bind(null, async (ns: NS, flags: dan.Flags) => {
   const ramToStart = base.getRamAvailable();
   ns.tprint(`INFO Host RAM: ${ns.formatRam(ramToStart)} available total`);
 
-  const stopwatchPrep = new dan.Stopwatch(ns);
-  const prep = planPrep(ns, base);
-  ns.tprint(`INFO Prep plan ready (${stopwatchPrep})`);
-
-  let hacksPerBatch = 0;
-  let plan = prep;
-  if (plan.multiplierHack > 0.001) {
-    const stopwatchHacks = new dan.Stopwatch(ns);
-    hacksPerBatch = await planHacksPerBatch(ns, prep);
-    ns.tprint(`INFO ${hacksPerBatch} hacks per batch (${stopwatchHacks})`);
+  let plan = planPrep(ns, base);
+  const hacksPerBatch = await planHacksPerBatch(ns, plan);
+  if (hacksPerBatch === -1) {
+    ns.tprint('WARNING Could not plan number of hacks per batch');
+  } else {
+    ns.tprint(`INFO ${hacksPerBatch} hacks per batch`);
 
     const stopwatchBatch = new dan.Stopwatch(ns);
     let lastSleep = performance.now();
@@ -866,6 +858,8 @@ export const main = dan.main.bind(null, async (ns: NS, flags: dan.Flags) => {
         ns.tprint(`WARNING Awaiting ${plan.getAwaitCount()}`);
         break;
       }
+      // This loop is far-and-away the most demanding in the script, so let's
+      // make sure we don't lock up the UI.
       if (performance.now() > lastSleep + 20) {
         await ns.sleep(0);
         lastSleep = performance.now();
