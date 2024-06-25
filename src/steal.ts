@@ -372,15 +372,8 @@ export class Plan implements PlanConst, PlanMutable {
 
 function planBase(ns: NS, player: Player): PlanConst {
   const servers = scanServers(ns);
-  ns.tprint(`INFO Servers: ${servers.length}`);
-
   const hosts = rootServers(ns, player, servers);
-  ns.tprint(`INFO Hosts: ${hosts.length}`);
-
-  const stopwatchBestTargets = new dan.Stopwatch(ns);
   const target = bestTarget(ns, servers);
-  ns.tprint(`INFO Target: ${target.hostname} (${stopwatchBestTargets})`);
-
   return new Plan(
     player,
     hosts,
@@ -838,8 +831,13 @@ type ThreadReservation = {
 };
 
 export const main = dan.main.bind(null, async (ns: NS, flags: dan.Flags) => {
+  ns.tprint('INFO ---');
+
   const player = ns.getPlayer();
   const base = planBase(ns, player);
+  ns.tprint(
+    `INFO Targeting "${base.target.hostname}" with ${base.hosts.length} hosts`
+  );
 
   const ramToStart = base.getRamAvailable();
   ns.tprint(`INFO Host RAM: ${ns.formatRam(ramToStart)} available total`);
