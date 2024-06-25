@@ -499,7 +499,7 @@ export function planHWGW(
  * slight loss in efficiency per batch (~10%) is more than made up for by
  * planning _far_ more batches (10x for me) in the same amount of planning time.
  */
-async function planHacksPerBatch(ns: NS, plan: PlanConst) {
+function planHacksPerBatch(ns: NS, plan: PlanConst) {
   // Any threads beyond this will have no money to steal, so efficiency only
   // goes down after this.
   const limit = Math.floor(1 / plan.multiplierHack);
@@ -843,7 +843,7 @@ export const main = dan.main.bind(null, async (ns: NS, flags: dan.Flags) => {
   ns.tprint(`INFO Host RAM: ${ns.formatRam(ramToStart)} available total`);
 
   let plan = planPrep(ns, base);
-  const hacksPerBatch = await planHacksPerBatch(ns, plan);
+  const hacksPerBatch = planHacksPerBatch(ns, plan);
   if (hacksPerBatch === -1) {
     ns.tprint('WARNING Could not plan number of hacks per batch');
   } else {
