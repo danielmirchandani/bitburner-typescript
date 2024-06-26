@@ -33,11 +33,13 @@ export async function main(
   const flags = new Flags(ns);
   ns.tprint(`INFO dry-run: ${Boolean(flags.dryRun())}`);
   const server = new SignalServer(ns);
+  let keepGoing = true;
+  server.registerHandler(SIGNAL_STOP, () => (keepGoing = false));
   server.nextSignal().then(server.dispatch.bind(server));
-  while (!server.getSignalledStop()) {
+  while (keepGoing) {
     await iteration(ns, flags);
     if (flags.dryRun()) {
-      return;
+      keepGoing = false;
     }
   }
 }
@@ -45,12 +47,8 @@ export async function main(
 class SignalServer {
   private handlers = new Map<number, () => void>();
   private readonly port;
-  private signalledStop = false;
 
   public constructor(ns: NS) {
-    this.handlers.set(SIGNAL_STOP, () => {
-      this.signalledStop = true;
-    });
     this.port = ns.getPortHandle(ns.pid);
     this.port.clear();
   }
@@ -62,10 +60,6 @@ class SignalServer {
     }
     handler();
     this.nextSignal().then(this.dispatch.bind(this));
-  }
-
-  getSignalledStop(): boolean {
-    return this.signalledStop;
   }
 
   private async nextRead() {
