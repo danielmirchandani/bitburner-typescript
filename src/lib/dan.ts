@@ -3,6 +3,7 @@ import type {NS, ScriptArg} from '../../NetscriptDefinitions.d.ts';
 const PROTOCOL_MAGIC_NUMBER = 84;
 export const SIGNAL_STOP = 3;
 export const SIGNAL_HEARTBEAT = 5;
+export const SIGNAL_DONE = 6;
 
 export class Flags {
   static readonly SCHEMA: [string, ScriptArg | string[]][] = [['n', false]];
@@ -33,6 +34,8 @@ export async function main(
   const flags = new Flags(ns);
   ns.tprint(`INFO dry-run: ${Boolean(flags.dryRun())}`);
   const server = new SignalServer(ns);
+  // Each caller of `main` will decide what to do with this.
+  server.registerHandler(SIGNAL_DONE, () => {});
   let keepGoing = true;
   server.registerHandler(SIGNAL_STOP, () => (keepGoing = false));
   server.listen();
@@ -45,7 +48,7 @@ export async function main(
 }
 
 class SignalServer {
-  private handlers = new Map<number, () => void>();
+  private handlers = new Map<number, (clientPId: number) => void>();
   private readonly port;
 
   public constructor(ns: NS) {
@@ -70,7 +73,7 @@ class SignalServer {
     if (handler === undefined) {
       throw new Error(`Don't know how to handle signal ${signal}`);
     }
-    handler();
+    handler(clientPId);
     return this.listen();
   }
 
@@ -81,7 +84,7 @@ class SignalServer {
     return this.port.read();
   }
 
-  registerHandler(signal: number, handler: () => void) {
+  registerHandler(signal: number, handler: (clientPId: number) => void) {
     const previous = this.handlers.get(signal);
     if (previous === undefined) {
       this.handlers.set(signal, handler);
