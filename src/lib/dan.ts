@@ -35,7 +35,7 @@ export async function main(
   const server = new SignalServer(ns);
   let keepGoing = true;
   server.registerHandler(SIGNAL_STOP, () => (keepGoing = false));
-  server.nextSignal().then(server.dispatch.bind(server));
+  server.listen();
   while (keepGoing) {
     await iteration(ns, flags);
     if (flags.dryRun()) {
@@ -53,23 +53,7 @@ class SignalServer {
     this.port.clear();
   }
 
-  dispatch(signal: number) {
-    const handler = this.handlers.get(signal);
-    if (handler === undefined) {
-      throw new Error(`Don't know how to handle signal ${signal}`);
-    }
-    handler();
-    this.nextSignal().then(this.dispatch.bind(this));
-  }
-
-  private async nextRead() {
-    if (this.port.empty()) {
-      await this.port.nextWrite();
-    }
-    return this.port.read();
-  }
-
-  async nextSignal() {
+  async listen(): Promise<void> {
     const magic = await this.nextRead();
     if (magic !== PROTOCOL_MAGIC_NUMBER) {
       throw new Error(`Server requires magic number, got ${magic}`);
@@ -82,7 +66,19 @@ class SignalServer {
     if (typeof signal !== 'number') {
       throw new Error(`Server requires signal, got ${signal}`);
     }
-    return signal;
+    const handler = this.handlers.get(signal);
+    if (handler === undefined) {
+      throw new Error(`Don't know how to handle signal ${signal}`);
+    }
+    handler();
+    return this.listen();
+  }
+
+  private async nextRead() {
+    if (this.port.empty()) {
+      await this.port.nextWrite();
+    }
+    return this.port.read();
   }
 
   registerHandler(signal: number, handler: () => void) {
