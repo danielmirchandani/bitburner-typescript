@@ -760,50 +760,34 @@ export class Script {
 
   private constructor(
     readonly path: string,
-    private readonly target: Readonly<Required<Server>>,
     readonly duration: number
   ) {}
 
-  exec(ns: NS, endMs: number, pIds: number[]) {
+  exec(ns: NS, target: Readonly<Server>, endMs: number, pIds: number[]) {
+    const delay = endMs - this.duration;
     for (const reservation of this.threads) {
-      const delay = endMs - this.duration;
       pIds.push(
         ns.exec(
           this.path,
           reservation.host.hostname,
           {temporary: true, threads: reservation.threads},
           `--delay=${delay}`,
-          `--target=${this.target.hostname}`
+          `--target=${target.hostname}`
         )
       );
     }
   }
 
-  /** Growth to expect if growing with current thread reservations. */
-  growPercentSearch(ns: NS) {
-    return this.threads.reduce(
-      (previous, reservation) =>
-        previous *
-        growPercentSearch(
-          ns,
-          this.target,
-          reservation.host,
-          reservation.threads
-        ),
-      1
-    );
-  }
-
   static newGrow(plan: PlanConst) {
-    return new Script('grow.js', plan.target, plan.timeGrow);
+    return new Script('grow.js', plan.timeGrow);
   }
 
   static newHack(plan: PlanConst) {
-    return new Script('hack.js', plan.target, plan.timeHack);
+    return new Script('hack.js', plan.timeHack);
   }
 
   static newWeaken(plan: PlanConst) {
-    return new Script('weaken.js', plan.target, plan.timeWeaken);
+    return new Script('weaken.js', plan.timeWeaken);
   }
 
   reserveThreadsFromStart(ns: NS, threadsWanted: number, hosts: Host[]) {
@@ -886,21 +870,11 @@ export const main = dan.main.bind(null, async (ns: NS, flags: dan.Flags) => {
     0
   );
   const pIdsPlan: number[] = [];
-  const stopwatchExec = new dan.Stopwatch(ns);
-  let lastPrint = performance.now();
-  let countExec = 0;
   for (const script of plan.scripts) {
-    if (performance.now() > lastPrint + 50) {
-      ns.tprint(
-        `INFO ${countExec} scripts out of ${plan.scripts.length} exec'd`
-      );
-      lastPrint = performance.now();
-    }
     if (flags.dryRun()) {
       continue;
     }
-    script.exec(ns, durationMax, pIdsPlan);
-    ++countExec;
+    script.exec(ns, plan.target, durationMax, pIdsPlan);
   }
   ns.tprint(
     `INFO Executed (${stopwatchExec}), expecting to sleep ${ns.tFormat(durationMax)}`
