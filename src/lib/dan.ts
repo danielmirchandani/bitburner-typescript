@@ -2,8 +2,11 @@ import type {NS, ScriptArg} from '../../NetscriptDefinitions.d.ts';
 
 const PROTOCOL_MAGIC_NUMBER = 84;
 export const SIGNAL_STOP = 3;
+// export const SIGNAL_NEXT = 4;
 export const SIGNAL_HEARTBEAT = 5;
-export const SIGNAL_DONE = 6;
+// export const SIGNAL_DONE = 6;
+export const SIGNAL_STEAL_DONE = 7;
+export const SIGNAL_SHARE_DONE = 8;
 
 export class Flags {
   static readonly SCHEMA: [string, ScriptArg | string[]][] = [['n', false]];
@@ -27,28 +30,8 @@ export function formatInt(ns: NS, int: number) {
   return ns.formatNumber(int, 1, 1000, true);
 }
 
-export async function main(
-  iteration: (ns: NS, flags: Flags) => Promise<void>,
-  ns: NS
-) {
-  const flags = new Flags(ns);
-  ns.tprint(`INFO dry-run: ${Boolean(flags.dryRun())}`);
-  const server = new SignalServer(ns);
-  // Each caller of `main` will decide what to do with this.
-  server.registerHandler(SIGNAL_DONE, () => {});
-  let keepGoing = true;
-  server.registerHandler(SIGNAL_STOP, () => (keepGoing = false));
-  server.listen();
-  while (keepGoing) {
-    await iteration(ns, flags);
-    if (flags.dryRun()) {
-      keepGoing = false;
-    }
-  }
-}
-
-class SignalServer {
-  private handlers = new Map<number, (clientPId: number) => void>();
+export class SignalServer {
+  private handlers = new Map<number, () => void>();
   private readonly port;
 
   public constructor(ns: NS) {
@@ -56,6 +39,12 @@ class SignalServer {
     this.port.clear();
   }
 
+  /**
+   * Get the next available signal and call that signal's handler, then repeat.
+   *
+   * The returned `Promise` will never resolve, but must still be awaited (for
+   * example, with `Promise.race()`) for this to progress.
+   */
   async listen(): Promise<void> {
     const magic = await this.nextRead();
     if (magic !== PROTOCOL_MAGIC_NUMBER) {
@@ -73,7 +62,7 @@ class SignalServer {
     if (handler === undefined) {
       throw new Error(`Don't know how to handle signal ${signal}`);
     }
-    handler(clientPId);
+    handler();
     return this.listen();
   }
 
@@ -84,13 +73,12 @@ class SignalServer {
     return this.port.read();
   }
 
-  registerHandler(signal: number, handler: (clientPId: number) => void) {
-    const previous = this.handlers.get(signal);
-    if (previous === undefined) {
-      this.handlers.set(signal, handler);
-    } else if (previous !== handler) {
-      throw new Error(`${signal} already handled by ${previous.name}`);
-    }
+  registerHandler(signal: number, handler: () => void) {
+    this.handlers.set(signal, handler);
+  }
+
+  unregisterHandler(signal: number) {
+    return this.handlers.delete(signal);
   }
 }
 

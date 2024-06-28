@@ -817,7 +817,7 @@ type ThreadReservation = {
   readonly threads: number;
 };
 
-export const main = dan.main.bind(null, async (ns: NS, flags: dan.Flags) => {
+async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
   ns.tprint('INFO ---');
 
   const player = ns.getPlayer();
@@ -924,4 +924,25 @@ export const main = dan.main.bind(null, async (ns: NS, flags: dan.Flags) => {
     suggestPorts(ns, player);
     purchaseServers(ns, player);
   }
-});
+}
+
+export async function main(ns: NS) {
+  const flags = new dan.Flags(ns);
+  ns.tprint(`INFO dry-run: ${Boolean(flags.dryRun())}`);
+  let keepGoing = true;
+
+  const server = new dan.SignalServer(ns);
+  server.registerHandler(dan.SIGNAL_STOP, () => {
+    ns.tprint('INFO Got SIGNAL_STOP; quitting after next iteration');
+    keepGoing = false;
+  });
+  const neverResolves = server.listen();
+
+  while (keepGoing) {
+    await Promise.race([iteration(ns, flags, server), neverResolves]);
+    if (flags.dryRun()) {
+      keepGoing = false;
+    }
+  }
+  ns.tprint('INFO Done!');
+}
