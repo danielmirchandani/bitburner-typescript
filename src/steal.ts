@@ -263,6 +263,7 @@ interface PlanConst {
   readonly debugStrings: Readonly<Map<string, number>>;
 
   copy(mutableHosts: Host[], mutableTarget: Required<Server>): PlanMutable;
+  execScripts(ns: NS, server: dan.SignalServer): Promise<void>;
   getAwaitCount(): number;
   getRamAvailable(): number;
   growAmount(ns: NS, grows: number, host: Readonly<Host>): number;
@@ -323,6 +324,70 @@ export class Plan implements PlanConst, PlanMutable {
       Array.from(this.scripts),
       new Map<string, number>(this.debugStrings)
     );
+  }
+
+  async execScripts(ns: NS, server: dan.SignalServer) {
+    const durationMax = this.scripts.reduce(
+      (max, current) => Math.max(max, current.duration),
+      0
+    );
+    const shareScript = 'share.js';
+
+    let keepGoing = true;
+    let sharePids: number[] = [];
+
+    const planDone = new Promise<void>(resolve => {
+      server.registerHandler(dan.SIGNAL_STEAL_DONE, resolve);
+    }).then(() => {
+      server.unregisterHandler(dan.SIGNAL_STEAL_DONE);
+      keepGoing = false;
+    });
+
+    for (let i = 0; i < this.scripts.length; ++i) {
+      this.scripts[i].exec(
+        ns,
+        this.target,
+        durationMax,
+        i === this.scripts.length - 1
+      );
+    }
+
+    const stopwatchWait = new dan.Stopwatch(ns);
+    while (keepGoing) {
+      const shareDone = new Promise<void>(resolve => {
+        server.registerHandler(dan.SIGNAL_SHARE_DONE, resolve);
+      }).then(() => {
+        server.unregisterHandler(dan.SIGNAL_SHARE_DONE);
+        ns.print(`INFO All share scripts finished: ${stopwatchWait}`);
+      });
+
+      sharePids = [];
+      for (let i = 0; i < this.hosts.length; ++i) {
+        const host = this.hosts[i];
+        const ramPerThread = host.getScriptRam(ns, shareScript);
+        const threads = Math.floor(host.ramAvailable / ramPerThread);
+        if (threads === 0) {
+          continue;
+        }
+        // The outer loop doesn't start in dry-run, so don't check.
+        sharePids.push(
+          ns.exec(
+            shareScript,
+            host.hostname,
+            {temporary: true, threads: threads},
+            `--server=${i !== this.hosts.length - 1 ? -1 : ns.pid}`
+          )
+        );
+      }
+
+      const duration = durationMax - stopwatchWait.getElapsed();
+      ns.print(`INFO ${ns.tFormat(duration)} left`);
+
+      await Promise.race([planDone, shareDone]);
+    }
+    for (const pid of sharePids) {
+      ns.kill(pid);
+    }
   }
 
   getAwaitCount() {
@@ -763,17 +828,17 @@ export class Script {
     readonly duration: number
   ) {}
 
-  exec(ns: NS, target: Readonly<Server>, endMs: number, pIds: number[]) {
+  exec(ns: NS, target: Readonly<Server>, endMs: number, signalOnLast: boolean) {
     const delay = endMs - this.duration;
-    for (const reservation of this.threads) {
-      pIds.push(
-        ns.exec(
-          this.path,
-          reservation.host.hostname,
-          {temporary: true, threads: reservation.threads},
-          `--delay=${delay}`,
-          `--target=${target.hostname}`
-        )
+    for (let i = 0; i < this.threads.length; ++i) {
+      const reservation = this.threads[i];
+      ns.exec(
+        this.path,
+        reservation.host.hostname,
+        {temporary: true, threads: reservation.threads},
+        `--delay=${delay}`,
+        `--server=${!signalOnLast || i !== this.threads.length - 1 ? -1 : ns.pid}`,
+        `--target=${target.hostname}`
       );
     }
   }
@@ -837,11 +902,18 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
     ns.tprint(`INFO ${hacksPerBatch} hacks per batch`);
 
     const stopwatchBatch = new dan.Stopwatch(ns);
+    let lastPrint = performance.now();
     let lastSleep = performance.now();
     while (stopwatchBatch.getElapsed() < 20_000) {
       if (plan.getAwaitCount() > 1_000_000) {
         ns.tprint(`WARNING Awaiting ${plan.getAwaitCount()}`);
         break;
+      }
+      if (performance.now() > lastPrint + 2_000) {
+        ns.tprint(
+          `INFO Planned ${plan.batches} batches so far (${stopwatchBatch})`
+        );
+        lastPrint = performance.now();
       }
       // This loop is far-and-away the most demanding in the script, so let's
       // make sure we don't lock up the UI.
@@ -863,48 +935,13 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
   }
 
   const ramAfterPlan = plan.getRamAvailable();
-  ns.tprint(`INFO ${ns.formatRam(ramAfterPlan)} RAM left, sharing`);
-
-  const durationMax = plan.scripts.reduce(
-    (max, current) => Math.max(max, current.duration),
-    0
-  );
-  const pIdsPlan: number[] = [];
-  for (const script of plan.scripts) {
-    if (flags.dryRun()) {
-      continue;
-    }
-    script.exec(ns, plan.target, durationMax, pIdsPlan);
-  }
   ns.tprint(
-    `INFO Executed (${stopwatchExec}), expecting to sleep ${ns.tFormat(durationMax)}`
+    `INFO Expecting ${ns.formatRam(ramAfterPlan)} RAM available while waiting`
   );
-  const stopwatchWait = new dan.Stopwatch(ns);
-  let pIdsShare: number[] = [];
-  const scriptShare = 'share.js';
-  while (pIdsPlan.find(current => ns.isRunning(current))) {
-    if (pIdsShare.find(current => ns.isRunning(current))) {
-      const duration = durationMax - stopwatchWait.getElapsed();
-      ns.print(`INFO ${ns.tFormat(duration)} left`);
-      await ns.sleep(1_000);
-      continue;
-    }
-    pIdsShare = [];
-    for (const host of plan.hosts) {
-      const ramPerThread = host.getScriptRam(ns, scriptShare);
-      const threads = Math.floor(host.ramAvailable / ramPerThread);
-      if (threads === 0) {
-        continue;
-      }
 
-      if (flags.dryRun()) {
-        continue;
-      }
-      pIdsShare.push(
-        ns.exec(scriptShare, host.hostname, {temporary: true, threads: threads})
-      );
-    }
-    ns.print(`INFO Started ${pIdsShare.length} share scripts`);
+  const stopwatchWait = new dan.Stopwatch(ns);
+  if (!flags.dryRun()) {
+    await plan.execScripts(ns, server);
   }
   const timeSleep = stopwatchWait.getElapsed();
   ns.tprint(`INFO Finished, slept ${ns.tFormat(stopwatchWait.getElapsed())}`);
