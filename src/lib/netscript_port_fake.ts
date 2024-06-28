@@ -4,12 +4,9 @@ export default class NetscriptPortFake implements NetscriptPort {
   static readonly EMPTY_PORT_VALUE = 'NULL PORT DATA';
 
   private data: unknown[] = [];
-  private resolve: ((value: void | PromiseLike<void>) => void) | null = null;
-  private promise: Promise<void>;
+  private writeCallbacks: ((value: void | PromiseLike<void>) => void)[] = [];
 
-  constructor(private readonly limit: number) {
-    this.promise = new Promise(resolve => (this.resolve = resolve));
-  }
+  constructor(private readonly limit: number) {}
 
   clear() {
     this.data = [];
@@ -27,7 +24,9 @@ export default class NetscriptPortFake implements NetscriptPort {
   }
 
   nextWrite() {
-    return this.promise;
+    return new Promise<void>(resolve => {
+      this.writeCallbacks.push(resolve);
+    });
   }
 
   peek() {
@@ -58,10 +57,13 @@ export default class NetscriptPortFake implements NetscriptPort {
       ret.push(this.read());
     }
     this.data.push(value);
-    if (this.resolve !== null) {
-      this.resolve();
+    // Create a new callback array before any callbbacks in case any of those
+    // callbacks add new callbacks.
+    const callbacks = this.writeCallbacks;
+    this.writeCallbacks = [];
+    for (const callback of callbacks) {
+      callback();
     }
-    this.promise = new Promise(resolve => (this.resolve = resolve));
     return ret;
   }
 }
