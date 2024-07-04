@@ -1,30 +1,53 @@
+import * as dan from './lib/dan.js';
 import type {NS} from '../NetscriptDefinitions.d.ts';
 import React from './lib/react.js';
 
-type Script = {name: string; status: string; start: number};
+type Script = {name: string; pid: number; status: string};
 type ScriptCallback = (scripts: Readonly<Readonly<Script>[]>) => void;
 
 class ScriptStatus {
-  private scripts: Script[] = [];
+  private reactState: Script[] = [];
+  private scripts = new Map<number, Script>();
+  private callbacks = new Map<any, ScriptCallback>();
 
-  private subscribed = new Map<Symbol, ScriptCallback>();
+  constructor(ns: NS, server: dan.SignalServer) {
+    server.registerHandler(dan.SIGNAL_STATUS, (clientPid: number) => {
+      const script = {
+        name: this.scriptName(ns, clientPid),
+        pid: clientPid,
+        status: ns.read(`run/${clientPid}.txt`),
+      };
+      this.scripts.set(clientPid, script);
+      // React needs this to be a new instance to detect the change.
+      this.reactState = Array.from(this.scripts.values());
+      for (const [, callback] of this.callbacks) {
+        callback(this.reactState);
+      }
+    });
+  }
 
   get(): Readonly<Readonly<Script>[]> {
-    return this.scripts;
+    return this.reactState;
   }
 
-  subscribe(key: Symbol, callback: ScriptCallback) {
-    this.subscribed.set(key, callback);
-    return () => {
-      this.subscribed.delete(key);
-    };
-  }
-
-  update(scripts: Script[]) {
-    this.scripts = scripts;
-    for (const [, callback] of this.subscribed) {
-      callback(this.scripts);
+  private scriptName(ns: NS, pid: number) {
+    const oldScript = this.scripts.get(pid);
+    if (oldScript !== undefined) {
+      return oldScript.name;
     }
+    const running = ns.getRunningScript(pid);
+    if (running !== null) {
+      return `${running.filename} - ${pid}`;
+    }
+    return `${pid}`;
+  }
+
+  subscribe(key: any, callback: ScriptCallback) {
+    this.callbacks.set(key, callback);
+  }
+
+  unsubscribe(key: any) {
+    this.callbacks.delete(key);
   }
 }
 
@@ -32,19 +55,26 @@ function ScriptRow(prop: {script: Script}) {
   return (
     <tr>
       <td style={{border: 'solid'}}>{prop.script.name}</td>
-      <td style={{border: 'solid'}}>{prop.script.status}</td>
-      <td style={{border: 'solid'}}>{performance.now() - prop.script.start}</td>
+      <td style={{border: 'solid', whiteSpace: 'pre-line'}}>
+        {prop.script.status}
+      </td>
     </tr>
   );
 }
 
 function ScriptTable(prop: {scriptStatus: ScriptStatus}) {
-  const [scripts, setScripts] = React.useState(prop.scriptStatus.get());
-  const key = React.useRef(null as Symbol | null);
+  const key = React.useRef<Symbol | null>(null);
   if (key.current === null) {
     key.current = Symbol();
   }
-  prop.scriptStatus.subscribe(key.current, setScripts);
+
+  const [scripts, setScripts] = React.useState(
+    prop.scriptStatus.get.bind(prop.scriptStatus)
+  );
+  React.useEffect(() => {
+    prop.scriptStatus.subscribe(key.current, setScripts);
+    return prop.scriptStatus.unsubscribe.bind(prop.scriptStatus, key.current);
+  }, [prop.scriptStatus, key, setScripts]);
 
   return (
     <table style={{borderCollapse: 'collapse', width: '100%'}}>
@@ -52,12 +82,11 @@ function ScriptTable(prop: {scriptStatus: ScriptStatus}) {
         <tr>
           <th style={{border: 'solid'}}>Script</th>
           <th style={{border: 'solid'}}>Status</th>
-          <th style={{border: 'solid'}}>Runtime</th>
         </tr>
       </thead>
       <tbody>
         {scripts.map(script => (
-          <ScriptRow script={script} />
+          <ScriptRow key={script.pid} script={script} />
         ))}
       </tbody>
     </table>
@@ -65,27 +94,9 @@ function ScriptTable(prop: {scriptStatus: ScriptStatus}) {
 }
 
 export async function main(ns: NS): Promise<void> {
-  const scriptStatus = new ScriptStatus();
-  const scripts = [
-    {
-      name: 'steal.js',
-      status: '0 batches',
-      start: performance.now(),
-    },
-  ];
-  scriptStatus.update(scripts);
-
-  ns.tprintRaw(<ScriptTable scriptStatus={scriptStatus} />);
-
-  let counter = 0;
-  const start = performance.now();
-  while (performance.now() < start + 10_000) {
-    scriptStatus.update(
-      scripts.map(script => {
-        return {...script, status: `${counter} batches`};
-      })
-    );
-    ++counter;
-    await ns.sleep(500);
-  }
+  const server = new dan.SignalServer(ns);
+  ns.printRaw(<ScriptTable scriptStatus={new ScriptStatus(ns, server)} />);
+  ns.tail();
+  // Wait forever while the signal handler above does all the actual work.
+  await server.listen();
 }

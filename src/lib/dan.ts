@@ -7,9 +7,13 @@ export const SIGNAL_HEARTBEAT = 5;
 // export const SIGNAL_DONE = 6;
 export const SIGNAL_STEAL_DONE = 7;
 export const SIGNAL_SHARE_DONE = 8;
+export const SIGNAL_STATUS = 9;
 
 export class Flags {
-  static readonly SCHEMA: [string, ScriptArg | string[]][] = [['n', false]];
+  static readonly SCHEMA: [string, ScriptArg | string[]][] = [
+    ['monitor', -1],
+    ['n', false],
+  ];
 
   private holder: {[key: string]: ScriptArg | string[]};
 
@@ -20,7 +24,15 @@ export class Flags {
   dryRun() {
     const value = this.holder.n;
     if (typeof value !== 'boolean') {
-      throw new Error(`Dry-run flag must be a boolean, got ${value}`);
+      throw new Error(`-n must be a boolean, got ${value}`);
+    }
+    return value;
+  }
+
+  monitorPid() {
+    const value = this.holder.monitor;
+    if (typeof value !== 'number') {
+      throw new Error(`--monitor must be a number, got ${value}`);
     }
     return value;
   }
@@ -31,12 +43,14 @@ export function formatInt(ns: NS, int: number) {
 }
 
 export class SignalServer {
-  private handlers = new Map<number, () => void>();
+  private handlers = new Map<number, (clientPid: number) => void>();
   private readonly port;
 
   public constructor(ns: NS) {
     this.port = ns.getPortHandle(ns.pid);
     this.port.clear();
+
+    ns.setTitle(`${ns.getScriptName()} - ${ns.pid}`);
   }
 
   /**
@@ -50,9 +64,9 @@ export class SignalServer {
     if (magic !== PROTOCOL_MAGIC_NUMBER) {
       throw new Error(`Server requires magic number, got ${magic}`);
     }
-    const clientPId = await this.nextRead();
-    if (typeof clientPId !== 'number') {
-      throw new Error(`Server requires client's PID, got ${clientPId}`);
+    const clientPid = await this.nextRead();
+    if (typeof clientPid !== 'number') {
+      throw new Error(`Server requires client's PID, got ${clientPid}`);
     }
     const signal = await this.nextRead();
     if (typeof signal !== 'number') {
@@ -62,7 +76,7 @@ export class SignalServer {
     if (handler === undefined) {
       throw new Error(`Don't know how to handle signal ${signal}`);
     }
-    handler();
+    handler(clientPid);
     return this.listen();
   }
 
@@ -73,7 +87,7 @@ export class SignalServer {
     return this.port.read();
   }
 
-  registerHandler(signal: number, handler: () => void) {
+  registerHandler(signal: number, handler: (clientPid: number) => void) {
     this.handlers.set(signal, handler);
   }
 
@@ -95,6 +109,15 @@ export class Stopwatch {
 
   toString() {
     return `${this.ns.formatNumber(this.getElapsed(), 1)}ms`;
+  }
+}
+
+export function updateStatus(ns: NS, flags: Flags, status: string) {
+  if (flags.monitorPid() !== -1) {
+    ns.write(`run/${ns.pid}.txt`, status, 'w');
+    writeSignal(ns, flags.monitorPid(), SIGNAL_STATUS);
+  } else {
+    ns.print(`INFO ${status}`);
   }
 }
 
