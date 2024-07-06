@@ -915,23 +915,10 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
     ns.tprint(`INFO ${hacksPerBatch} hacks per batch`);
 
     const stopwatchBatch = new dan.Stopwatch(ns);
-    let lastPrint = performance.now();
     let lastSleep = performance.now();
-    while (stopwatchBatch.getElapsed() < 20_000) {
-      if (plan.getAwaitCount() > 1_000_000) {
-        ns.tprint(`WARNING Awaiting ${plan.getAwaitCount()}`);
-        break;
-      }
-      if (performance.now() > lastPrint + 2_000) {
-        ns.tprint(
-          `INFO Planned ${plan.batches} batches so far (${stopwatchBatch})`
-        );
-        lastPrint = performance.now();
-      }
-      // This loop is far-and-away the most demanding in the script, so let's
-      // make sure we don't lock up the UI.
+    while (plan.getAwaitCount() < 1_000_000) {
       if (performance.now() > lastSleep + 20) {
-        updateStatus('Batches', `${plan.getBatches()} (${stopwatchBatch})`);
+        updateStatus('Awaits', `${plan.getAwaitCount()} (${stopwatchBatch})`);
         await ns.sleep(0);
         lastSleep = performance.now();
       }
@@ -942,7 +929,7 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
       }
       plan = maybePlan;
     }
-    updateStatus('Batches', `${plan.getBatches()} (${stopwatchBatch})`);
+    updateStatus('Awaits', `${plan.getAwaitCount()} (${stopwatchBatch})`);
   }
   for (const [key, count] of plan.debugStrings) {
     ns.tprint(`INFO ${key} (${count}x)`);
