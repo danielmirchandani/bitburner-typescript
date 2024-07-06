@@ -284,7 +284,7 @@ export class Plan {
     let keepGoing = true;
     let sharePids: number[] = [];
 
-    const planDone = new Promise<void>(resolve => {
+    const planDone = new Promise<number>(resolve => {
       server.registerHandler(dan.SIGNAL_STEAL_DONE, resolve);
     }).then(() => {
       server.unregisterHandler(dan.SIGNAL_STEAL_DONE);
@@ -302,33 +302,39 @@ export class Plan {
       }
     }
 
+    let shares = 0;
     const stopwatchWait = new dan.Stopwatch(ns);
     while (keepGoing) {
       const duration = durationMax - stopwatchWait.getElapsed();
       updateStatus('Left', ns.tFormat(duration));
 
-      const shareDone = new Promise<void>(resolve => {
+      const shareDone = new Promise<number>(resolve => {
         server.registerHandler(dan.SIGNAL_SHARE_DONE, resolve);
       }).then(() => {
         server.unregisterHandler(dan.SIGNAL_SHARE_DONE);
-        ns.print(`INFO All share scripts finished: ${stopwatchWait}`);
+        ++shares;
+        updateStatus('Shares', `${shares}`);
       });
 
-      sharePids = [];
-      for (let i = 0; i < this.hosts.length; ++i) {
-        const host = this.hosts[i];
+      const shareHosts: [Readonly<Host>, number][] = [];
+      for (const host of this.hosts) {
         const ramPerThread = host.getScriptRam(ns, shareScript);
         const threads = Math.floor(host.ramAvailable / ramPerThread);
         if (threads === 0) {
           continue;
         }
-        // The outer loop doesn't start in dry-run, so don't check.
+        shareHosts.push([host, threads]);
+      }
+
+      sharePids = [];
+      for (let i = 0; i < shareHosts.length; ++i) {
+        const [host, threads] = shareHosts[i];
         sharePids.push(
           ns.exec(
             shareScript,
             host.hostname,
             {temporary: true, threads: threads},
-            `--server=${i !== this.hosts.length - 1 ? -1 : ns.pid}`
+            `--server=${i !== shareHosts.length - 1 ? -1 : ns.pid}`
           )
         );
       }
