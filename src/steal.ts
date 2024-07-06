@@ -266,7 +266,11 @@ export class Plan {
     readonly hasFormulas: boolean
   ) {}
 
-  async execScripts(ns: NS, server: dan.SignalServer) {
+  async exec(
+    ns: NS,
+    server: dan.SignalServer,
+    updateStatus: (key: string, value: string) => void
+  ) {
     const durationMax = this.scripts.reduce(
       (max, scripts) =>
         Math.max(
@@ -300,6 +304,9 @@ export class Plan {
 
     const stopwatchWait = new dan.Stopwatch(ns);
     while (keepGoing) {
+      const duration = durationMax - stopwatchWait.getElapsed();
+      updateStatus('Left', ns.tFormat(duration));
+
       const shareDone = new Promise<void>(resolve => {
         server.registerHandler(dan.SIGNAL_SHARE_DONE, resolve);
       }).then(() => {
@@ -325,10 +332,6 @@ export class Plan {
           )
         );
       }
-
-      const duration = durationMax - stopwatchWait.getElapsed();
-      ns.print(`INFO ${ns.tFormat(duration)} left`);
-
       await Promise.race([planDone, shareDone]);
     }
     for (const pid of sharePids) {
@@ -886,16 +889,23 @@ type ThreadReservation = {
 };
 
 async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
+  const status = new Map<string, string>();
+  function updateStatus(key: string, value: string) {
+    status.set(key, value);
+    const ret: string[] = [];
+    status.forEach((value, key) => ret.push(`${key}: ${value}`));
+    dan.updateStatus(ns, flags, ret.join('\n'));
+  }
+
   ns.tprint('INFO ---');
 
   const player = ns.getPlayer();
   const base = planBase(ns, player);
-  ns.tprint(
-    `INFO Targeting "${base.target.hostname}" with ${base.hosts.length} hosts`
-  );
+  updateStatus('Target', base.getTarget().hostname);
+  updateStatus('Hosts', base.getHosts().length.toString());
 
   const ramToStart = base.getRamAvailable();
-  ns.tprint(`INFO Host RAM: ${ns.formatRam(ramToStart)} available total`);
+  updateStatus('RAM free', ns.formatRam(ramToStart));
 
   let plan = planPrep(ns, base);
   const hacksPerBatch = planHacksPerBatch(ns, plan);
@@ -921,6 +931,7 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
       // This loop is far-and-away the most demanding in the script, so let's
       // make sure we don't lock up the UI.
       if (performance.now() > lastSleep + 20) {
+        updateStatus('Batches', `${plan.getBatches()} (${stopwatchBatch})`);
         await ns.sleep(0);
         lastSleep = performance.now();
       }
@@ -931,20 +942,21 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
       }
       plan = maybePlan;
     }
-    ns.tprint(`INFO Planned ${plan.batches} batches (${stopwatchBatch})`);
+    updateStatus('Batches', `${plan.getBatches()} (${stopwatchBatch})`);
   }
   for (const [key, count] of plan.debugStrings) {
     ns.tprint(`INFO ${key} (${count}x)`);
   }
 
   const ramAfterPlan = plan.getRamAvailable();
-  ns.tprint(
-    `INFO Expecting ${ns.formatRam(ramAfterPlan)} RAM available while waiting`
+  updateStatus(
+    'RAM free',
+    `${ns.formatRam(ramAfterPlan)}/${ns.formatRam(ramToStart)}`
   );
 
   const stopwatchWait = new dan.Stopwatch(ns);
   if (!flags.dryRun()) {
-    await plan.execScripts(ns, server);
+    await plan.exec(ns, server, updateStatus);
   }
   const timeSleep = stopwatchWait.getElapsed();
   ns.tprint(`INFO Finished, slept ${ns.tFormat(stopwatchWait.getElapsed())}`);
