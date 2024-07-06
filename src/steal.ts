@@ -249,86 +249,30 @@ export function growPercentSearch(
   return multiplier;
 }
 
-interface PlanConst {
-  readonly player: Readonly<Player>;
-  readonly hosts: Readonly<Readonly<Host>[]>;
-  readonly target: Readonly<Required<Server>>;
-  readonly multiplierHack: number;
-  readonly timeGrow: number;
-  readonly timeHack: number;
-  readonly timeWeaken: number;
-  readonly hasFormulas: boolean;
-  readonly batches: number;
-  readonly scripts: Readonly<Readonly<Script>[]>;
-  readonly debugStrings: Readonly<Map<string, number>>;
+export class Plan {
+  private awaits = 0;
+  private batches: number = 0;
+  readonly debugStrings = new Map<string, number>();
+  private scripts: Readonly<Script>[][] = [];
 
-  copy(mutableHosts: Host[], mutableTarget: Required<Server>): PlanMutable;
-  execScripts(ns: NS, server: dan.SignalServer): Promise<void>;
-  getAwaitCount(): number;
-  getRamAvailable(): number;
-  growAmount(ns: NS, grows: number, host: Readonly<Host>): number;
-  growThreads(ns: NS, host: Readonly<Host>): number;
-}
-
-interface PlanMutable extends PlanConst {
-  player: Player;
-  hosts: Host[];
-  target: Required<Server>;
-  multiplierHack: number;
-  timeGrow: number;
-  timeHack: number;
-  timeWeaken: number;
-  hasFormulas: boolean;
-  batches: number;
-  scripts: Script[];
-  debugStrings: Map<string, number>;
-
-  addDebugString(key: string): void;
-}
-
-export class Plan implements PlanConst, PlanMutable {
   constructor(
-    public player: Player,
-    public hosts: Host[],
-    public target: Required<Server>,
-    public multiplierHack: number,
-    public timeGrow: number,
-    public timeHack: number,
-    public timeWeaken: number,
-    public hasFormulas: boolean,
-    public batches: number = 0,
-    public scripts: Script[] = [],
-    public debugStrings = new Map<string, number>()
+    readonly player: Readonly<Player>,
+    private hosts: Readonly<Host>[],
+    private target: Readonly<Required<Server>>,
+    readonly multiplierHack: number,
+    readonly timeGrow: number,
+    readonly timeHack: number,
+    readonly timeWeaken: number,
+    readonly hasFormulas: boolean
   ) {}
-
-  addDebugString(key: string) {
-    const previous = this.debugStrings.get(key);
-    if (previous === undefined) {
-      this.debugStrings.set(key, 1);
-    } else {
-      this.debugStrings.set(key, previous + 1);
-    }
-  }
-
-  copy(mutableHosts: Host[], mutableTarget: Required<Server>) {
-    return new Plan(
-      this.player,
-      mutableHosts,
-      mutableTarget,
-      this.multiplierHack,
-      this.timeGrow,
-      this.timeHack,
-      this.timeWeaken,
-      this.hasFormulas,
-      this.batches,
-      Array.from(this.scripts),
-      new Map<string, number>(this.debugStrings)
-    );
-  }
 
   async execScripts(ns: NS, server: dan.SignalServer) {
     const durationMax = this.scripts.reduce(
-      (max, current) => Math.max(max, current.duration),
+      (max, scripts) =>
+        Math.max(
+          max,
+          scripts.reduce((max, current) => Math.max(max, current.duration), 0)
+        ),
       0
     );
     const shareScript = 'share.js';
@@ -344,12 +288,14 @@ export class Plan implements PlanConst, PlanMutable {
     });
 
     for (let i = 0; i < this.scripts.length; ++i) {
-      this.scripts[i].exec(
-        ns,
-        this.target,
-        durationMax,
-        i === this.scripts.length - 1
-      );
+      for (let j = 0; j < this.scripts[i].length; ++j) {
+        this.scripts[i][j].exec(
+          ns,
+          this.target,
+          durationMax,
+          i === this.scripts.length - 1 && j === this.scripts[i].length - 1
+        );
+      }
     }
 
     const stopwatchWait = new dan.Stopwatch(ns);
@@ -391,51 +337,112 @@ export class Plan implements PlanConst, PlanMutable {
   }
 
   getAwaitCount() {
-    return this.scripts.reduce((sum, script) => sum + script.threads.length, 0);
+    return this.awaits;
+  }
+
+  getBatches() {
+    return this.batches;
+  }
+
+  getHosts(): Readonly<Readonly<Host>[]> {
+    return this.hosts;
   }
 
   getRamAvailable() {
     return this.hosts.reduce((sum, host) => sum + host.ramAvailable, 0);
   }
 
-  growAmount(ns: NS, grows: number, host: Readonly<Host>) {
+  getTarget() {
+    return this.target;
+  }
+
+  growAmount(
+    ns: NS,
+    target: Readonly<Required<Server>>,
+    grows: number,
+    host: Readonly<Host>
+  ) {
     if (this.hasFormulas) {
       return ns.formulas.hacking.growAmount(
-        this.target,
+        target,
         this.player,
         grows,
         host.cpuCores
       );
     } else {
       return Math.min(
-        this.target.moneyAvailable *
-          growPercentSearch(ns, this.target, host, grows),
-        this.target.moneyMax
+        target.moneyAvailable * growPercentSearch(ns, target, host, grows),
+        target.moneyMax
       );
     }
   }
 
-  growThreads(ns: NS, host: Readonly<Host>) {
+  growThreads(
+    ns: NS,
+    target: Readonly<Required<Server>>,
+    host: Readonly<Host>
+  ) {
     if (this.hasFormulas) {
       return ns.formulas.hacking.growThreads(
-        this.target,
+        target,
         this.player,
-        this.target.moneyMax,
+        target.moneyMax,
         host.cpuCores
       );
     } else {
       const multiplier =
-        this.target.moneyAvailable > 0
-          ? this.target.moneyMax / this.target.moneyAvailable
+        target.moneyAvailable > 0
+          ? target.moneyMax / target.moneyAvailable
           : 1;
       return Math.ceil(
-        ns.growthAnalyze(this.target.hostname, multiplier, host.cpuCores)
+        ns.growthAnalyze(target.hostname, multiplier, host.cpuCores)
       );
     }
   }
+
+  transaction(): PlanTransaction {
+    const plan = this;
+    return {
+      batches: 0,
+      debugStrings: new Map(),
+      hosts: plan.hosts.map(host => host.copy()),
+      scripts: [],
+      target: {...plan.target},
+
+      addDebugString(key: string) {
+        dan.mapIncrement(this.debugStrings, key, 1);
+      },
+
+      commit() {
+        plan.awaits += this.scripts.reduce(
+          (sum, script) => sum + script.threads.length,
+          0
+        );
+        plan.batches += this.batches;
+        this.debugStrings.forEach((value, key) => {
+          dan.mapIncrement(plan.debugStrings, key, value);
+        });
+        plan.hosts = this.hosts;
+        plan.scripts.push(this.scripts);
+        plan.target = this.target;
+        return plan;
+      },
+    };
+  }
 }
 
-function planBase(ns: NS, player: Player): PlanConst {
+interface PlanTransaction {
+  batches: number;
+  debugStrings: Map<string, number>;
+  hosts: Host[];
+  scripts: Script[];
+  target: Required<Server>;
+
+  addDebugString(key: string): void;
+  commit(): Plan;
+}
+
+function planBase(ns: NS, player: Player): Plan {
   const servers = scanServers(ns);
   const hosts = rootServers(ns, player, servers);
   const target = bestTarget(ns, servers);
@@ -451,16 +458,14 @@ function planBase(ns: NS, player: Player): PlanConst {
   );
 }
 
-function planGrow(ns: NS, grows: number, base: PlanConst) {
-  const hosts = base.hosts.map(host => host.copy());
-  const target: Required<Server> = {...base.target};
-  const plan: Plan = base.copy(hosts, target);
+function planGrow(ns: NS, grows: number, plan: Plan) {
+  const txn = plan.transaction();
 
   const scriptGrow = Script.newGrow(plan);
   let growsLeft = grows;
-  for (let i = hosts.length - 1; i >= 0 && growsLeft > 0; --i) {
-    const host = hosts[i];
-    const growsWanted = plan.growThreads(ns, host);
+  for (let i = txn.hosts.length - 1; i >= 0 && growsLeft > 0; --i) {
+    const host = txn.hosts[i];
+    const growsWanted = plan.growThreads(ns, txn.target, host);
     if (growsWanted < growsLeft) {
       return null;
     }
@@ -469,91 +474,87 @@ function planGrow(ns: NS, grows: number, base: PlanConst) {
       continue;
     }
     growsLeft -= grows;
-    target.moneyAvailable = plan.growAmount(ns, grows, host);
+    txn.target.moneyAvailable = plan.growAmount(ns, txn.target, grows, host);
   }
   if (growsLeft > 0) {
     return null;
   }
-  plan.scripts.push(scriptGrow);
+  txn.scripts.push(scriptGrow);
 
   const scriptWeaken = Script.newWeaken(plan);
   const weakens = Math.ceil(grows * WEAKENS_PER_GROW);
-  if (scriptWeaken.reserveThreadsFromStart(ns, weakens, hosts) !== weakens) {
+  if (
+    scriptWeaken.reserveThreadsFromStart(ns, weakens, txn.hosts) !== weakens
+  ) {
     return null;
   }
-  plan.scripts.push(scriptWeaken);
+  txn.scripts.push(scriptWeaken);
 
-  plan.addDebugString(`${grows} grow, ${weakens} weaken`);
-  return plan;
+  txn.addDebugString(`${grows} grow, ${weakens} weaken`);
+  return txn;
 }
 
-export function planHWGW(
-  ns: NS,
-  hacks: number,
-  base: PlanConst
-): PlanConst | null {
-  const hosts = base.hosts.map(host => host.copy());
-  const target: Required<Server> = {...base.target};
-  const plan = base.copy(hosts, target);
+export function planHWGW(ns: NS, hacks: number, plan: Plan): Plan | null {
+  const txn = plan.transaction();
 
   const scriptHack = Script.newHack(plan);
-  if (scriptHack.reserveThreadsFromStart(ns, hacks, hosts) !== hacks) {
+  if (scriptHack.reserveThreadsFromStart(ns, hacks, txn.hosts) !== hacks) {
     return null;
   }
-  const money = target.moneyMax * plan.multiplierHack * hacks;
-  plan.scripts.push(scriptHack);
-  target.moneyAvailable -= Math.min(money, target.moneyAvailable);
+  const money = txn.target.moneyMax * plan.multiplierHack * hacks;
+  txn.scripts.push(scriptHack);
+  txn.target.moneyAvailable -= Math.min(money, txn.target.moneyAvailable);
 
   const scriptHackWeaken = Script.newWeaken(plan);
   const weakensHackWanted = Math.ceil(WEAKENS_PER_HACK * hacks);
   const weakensHack = scriptHackWeaken.reserveThreadsFromStart(
     ns,
     weakensHackWanted,
-    hosts
+    txn.hosts
   );
   if (weakensHack !== weakensHackWanted) {
     return null;
   }
-  plan.scripts.push(scriptHackWeaken);
+  txn.scripts.push(scriptHackWeaken);
 
   const scriptGrow = Script.newGrow(plan);
   let growsTotal = 0;
   for (
-    let i = plan.hosts.length - 1;
-    i >= 0 && target.moneyAvailable < target.moneyMax;
+    let i = txn.hosts.length - 1;
+    i >= 0 && txn.target.moneyAvailable < txn.target.moneyMax;
     --i
   ) {
-    const host = hosts[i];
-    const growsWanted = plan.growThreads(ns, host);
+    const host = txn.hosts[i];
+    const growsWanted = plan.growThreads(ns, txn.target, host);
     const grows = scriptGrow.reserveThreadsOnHost(ns, growsWanted, host);
     if (grows === 0) {
       continue;
     }
     growsTotal += grows;
-    target.moneyAvailable = plan.growAmount(ns, grows, host);
+    txn.target.moneyAvailable = plan.growAmount(ns, txn.target, grows, host);
   }
-  if (target.moneyAvailable < target.moneyMax) {
+  if (txn.target.moneyAvailable < txn.target.moneyMax) {
     return null;
   }
-  plan.scripts.push(scriptGrow);
+  txn.scripts.push(scriptGrow);
 
   const scriptGrowWeaken = Script.newWeaken(plan);
   const weakensGrowWanted = Math.ceil(WEAKENS_PER_GROW * growsTotal);
   const weakensGrow = scriptGrowWeaken.reserveThreadsFromStart(
     ns,
     weakensGrowWanted,
-    hosts
+    txn.hosts
   );
   if (weakensGrow !== weakensGrowWanted) {
     return null;
   }
-  plan.scripts.push(scriptGrowWeaken);
+  txn.scripts.push(scriptGrowWeaken);
 
-  plan.batches += 1;
-  plan.addDebugString(
+  txn.batches += 1;
+  txn.addDebugString(
     `${hacks} hack, ${weakensHack} weaken, ${growsTotal} grow, ${weakensGrow} weaken`
   );
-  return plan;
+  return txn.commit();
 }
 
 /**
@@ -564,7 +565,7 @@ export function planHWGW(
  * slight loss in efficiency per batch (~10%) is more than made up for by
  * planning _far_ more batches (10x for me) in the same amount of planning time.
  */
-function planHacksPerBatch(ns: NS, plan: PlanConst) {
+function planHacksPerBatch(ns: NS, plan: Plan) {
   // Any threads beyond this will have no money to steal, so efficiency only
   // goes down after this.
   const limit = Math.floor(1 / plan.multiplierHack);
@@ -572,14 +573,15 @@ function planHacksPerBatch(ns: NS, plan: PlanConst) {
     return -1;
   }
   const ramToStart = plan.getRamAvailable();
-  const bestHost = plan.hosts[plan.hosts.length - 1];
-  const worstHost = plan.hosts[0];
+  const hosts = plan.getHosts();
+  const bestHost = hosts[hosts.length - 1];
+  const worstHost = hosts[0];
 
   let bestEfficiency = 0;
   let bestHacks = -1;
   for (let i = 1; i <= limit; ++i) {
     const weakensHack = Math.ceil(WEAKENS_PER_HACK * i);
-    const grows = plan.growThreads(ns, worstHost);
+    const grows = plan.growThreads(ns, plan.getTarget(), worstHost);
     const weakensGrow = Math.ceil(WEAKENS_PER_GROW * grows);
     const ramLowerBound =
       i * bestHost.getScriptRam(ns, 'hack.js') +
@@ -595,7 +597,7 @@ function planHacksPerBatch(ns: NS, plan: PlanConst) {
 
     // All plans have the same wait, so we don't need to consider it.
     const moneyPossible = plan.multiplierHack * i;
-    const money = Math.min(moneyPossible, plan.target.moneyAvailable);
+    const money = Math.min(moneyPossible, plan.getTarget().moneyAvailable);
     const efficiency = money / ramLowerBound;
     if (efficiency <= bestEfficiency) {
       continue;
@@ -606,12 +608,11 @@ function planHacksPerBatch(ns: NS, plan: PlanConst) {
   return bestHacks;
 }
 
-export function planPrep(ns: NS, base: PlanConst): PlanConst {
-  const hosts = base.hosts.map(host => host.copy());
-  const target: Required<Server> = {...base.target};
-  const plan = base.copy(hosts, target);
+export function planPrep(ns: NS, plan: Plan): Plan {
+  const txn = plan.transaction();
 
-  const securityWeakenInitial = target.hackDifficulty - target.minDifficulty;
+  const securityWeakenInitial =
+    txn.target.hackDifficulty - txn.target.minDifficulty;
   if (securityWeakenInitial > 0) {
     const scriptWeaken = Script.newWeaken(plan);
     const weakensWanted = Math.ceil(
@@ -622,44 +623,46 @@ export function planPrep(ns: NS, base: PlanConst): PlanConst {
     const weakens = scriptWeaken.reserveThreadsFromStart(
       ns,
       weakensWanted,
-      hosts
+      txn.hosts
     );
-    plan.scripts.push(scriptWeaken);
-    target.hackDifficulty -= SECURITY_PER_WEAKEN * weakens;
+    txn.scripts.push(scriptWeaken);
+    txn.target.hackDifficulty -= SECURITY_PER_WEAKEN * weakens;
 
-    plan.addDebugString(`${weakens} weaken`);
+    txn.addDebugString(`${weakens} weaken`);
     if (weakens !== weakensWanted) {
-      return plan;
+      return txn.commit();
     }
   }
 
   // `growthAnalyze` error is too large for us for multipliers this large.
-  if (!plan.hasFormulas && target.moneyAvailable <= 1) {
+  if (!plan.hasFormulas && txn.target.moneyAvailable <= 1) {
     ns.tprint(
-      `ERROR "${target.hostname}" < $1; if this repeats, stop the script.`
+      `ERROR "${txn.target.hostname}" < $1; if this repeats, stop the script.`
     );
 
     const scriptGrow = Script.newGrow(plan);
     const grows = scriptGrow.reserveThreadsOnHost(
       ns,
       Number.POSITIVE_INFINITY,
-      hosts[hosts.length - 1]
+      txn.hosts[txn.hosts.length - 1]
     );
-    plan.scripts.push(scriptGrow);
+    txn.scripts.push(scriptGrow);
 
     const scriptWeaken = Script.newWeaken(plan);
     const weakens = scriptWeaken.reserveThreadsFromStart(
       ns,
       Math.ceil(grows * WEAKENS_PER_GROW),
-      hosts
+      txn.hosts
     );
-    plan.scripts.push(scriptWeaken);
+    txn.scripts.push(scriptWeaken);
 
-    plan.addDebugString(`${grows} grow, ${weakens} weaken`);
-    return plan;
+    txn.addDebugString(`${grows} grow, ${weakens} weaken`);
+    return txn.commit();
   }
 
-  const plansGrow: Plan[] = [];
+  txn.commit();
+
+  const plansGrow: PlanTransaction[] = [];
   const grows = exponentialSearch(1, threads => {
     const maybePlan = planGrow(ns, threads, plan);
     if (maybePlan !== null) {
@@ -670,7 +673,7 @@ export function planPrep(ns: NS, base: PlanConst): PlanConst {
     }
   });
   if (grows > 0) {
-    return plansGrow[grows];
+    return plansGrow[grows].commit();
   } else {
     return plan;
   }
@@ -843,15 +846,15 @@ export class Script {
     }
   }
 
-  static newGrow(plan: PlanConst) {
+  static newGrow(plan: Plan) {
     return new Script('grow.js', plan.timeGrow);
   }
 
-  static newHack(plan: PlanConst) {
+  static newHack(plan: Plan) {
     return new Script('hack.js', plan.timeHack);
   }
 
-  static newWeaken(plan: PlanConst) {
+  static newWeaken(plan: Plan) {
     return new Script('weaken.js', plan.timeWeaken);
   }
 

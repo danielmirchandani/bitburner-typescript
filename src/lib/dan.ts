@@ -42,6 +42,19 @@ export function formatInt(ns: NS, int: number) {
   return ns.formatNumber(int, 1, 1000, true);
 }
 
+export function mapIncrement<Type>(
+  map: Map<Type, number>,
+  key: Type,
+  value: number
+) {
+  const previous = map.get(key);
+  if (previous !== undefined) {
+    map.set(key, previous + value);
+  } else {
+    map.set(key, value);
+  }
+}
+
 export class SignalServer {
   private handlers = new Map<number, (clientPid: number) => void>();
   private readonly port;
