@@ -95,7 +95,11 @@ function ScriptTable(prop: {scriptStatus: ScriptStatus}) {
 
 export async function main(ns: NS): Promise<void> {
   const server = new dan.SignalServer(ns);
-  ns.printRaw(<ScriptTable scriptStatus={new ScriptStatus(ns, server)} />);
+  ns.printRaw(
+    <React.StrictMode>
+      <ScriptTable scriptStatus={new ScriptStatus(ns, server)} />
+    </React.StrictMode>
+  );
   ns.tail();
   // Wait forever while the signal handler above does all the actual work.
   await server.listen();
