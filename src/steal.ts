@@ -291,8 +291,17 @@ export class Plan {
       keepGoing = false;
     });
 
+    let execCount = 0;
+    const stopwatchExec = new dan.Stopwatch(ns);
+    let lastSleep = performance.now();
     for (let i = 0; i < this.scripts.length; ++i) {
       for (let j = 0; j < this.scripts[i].length; ++j) {
+        ++execCount;
+        if (performance.now() > lastSleep + 20) {
+          updateStatus('Exec', `${execCount} (${stopwatchExec})`);
+          await ns.asleep(0);
+          lastSleep = performance.now();
+        }
         this.scripts[i][j].exec(
           ns,
           this.target,
@@ -301,6 +310,7 @@ export class Plan {
         );
       }
     }
+    updateStatus('Exec', `${execCount} (${stopwatchExec})`);
 
     let shares = 0;
     const stopwatchWait = new dan.Stopwatch(ns);
