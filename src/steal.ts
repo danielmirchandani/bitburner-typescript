@@ -461,7 +461,8 @@ interface PlanTransaction {
   commit(): Plan;
 }
 
-function planBase(ns: NS, player: Player): Plan {
+function planBase(ns: NS): Plan {
+  const player = ns.getPlayer();
   const servers = scanServers(ns);
   const hosts = rootServers(ns, player, servers);
   const target = bestTarget(ns, servers);
@@ -915,8 +916,7 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
 
   ns.tprint('INFO ---');
 
-  const player = ns.getPlayer();
-  const base = planBase(ns, player);
+  const base = planBase(ns);
   updateStatus('Target', base.getTarget().hostname);
   updateStatus('Hosts', base.getHosts().length.toString());
 
@@ -976,8 +976,8 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
   }
 
   if (ramAfterPlan < ramToStart / 2) {
-    suggestPorts(ns, player);
-    purchaseServers(ns, player);
+    suggestPorts(ns, plan.player);
+    purchaseServers(ns, plan.player);
   }
 }
 
