@@ -99,7 +99,7 @@ function bestTarget(ns: NS, servers: Required<Server>[]) {
     // target.moneyMax / (percent * target.moneyMax * chance);
     const hacks = 1 / (percent * chance);
     if (hasFormulas) {
-      const scratch = ns.getServer(target.hostname);
+      const scratch = {...target};
       scratch.hackDifficulty = target.minDifficulty;
       scratch.moneyAvailable = 0;
       grows = ns.formulas.hacking.growThreads(scratch, player, target.moneyMax);
@@ -316,7 +316,7 @@ export class Plan {
     const stopwatchWait = new dan.Stopwatch(ns);
     while (keepGoing) {
       const duration = durationMax - stopwatchWait.getElapsed();
-      updateStatus('Left', ns.tFormat(duration));
+      updateStatus('Left', ns.format.time(duration));
 
       const shareDone = new Promise<number>(resolve => {
         server.registerHandler(dan.SIGNAL_SHARE_DONE, resolve);
@@ -700,41 +700,41 @@ export function planPrep(ns: NS, plan: Plan): Plan {
 }
 
 function purchaseServers(ns: NS, player: Player) {
-  const limit = ns.getPurchasedServerLimit();
+  const limit = ns.cloud.getServerLimit();
   let ram = 2;
-  for (let i = ns.getPurchasedServers().length; i < limit; ++i) {
-    const cost = ns.getPurchasedServerCost(ram);
+  for (let i = ns.cloud.getServerNames().length; i < limit; ++i) {
+    const cost = ns.cloud.getServerCost(ram);
     if (cost > player.money) {
       ns.tprint(
-        `INFO Purchased server ${i} with ${ns.formatRam(ram)} RAM costs $${ns.formatNumber(cost)}`
+        `INFO Purchased server ${i} with ${ns.format.ram(ram)} RAM costs $${ns.format.number(cost)}`
       );
       return;
     }
-    ns.purchaseServer('home', ram);
+    ns.cloud.purchaseServer('home', ram);
     player.money -= cost;
   }
-  const max = ns.getPurchasedServerMaxRam();
+  const max = ns.cloud.getRamLimit();
   let nextRam = ram * 2;
   while (nextRam <= max) {
-    for (const hostname of ns.getPurchasedServers()) {
+    for (const hostname of ns.cloud.getServerNames()) {
       if (ns.getServerMaxRam(hostname) >= nextRam) {
         continue;
       }
-      const cost = ns.getPurchasedServerUpgradeCost(hostname, nextRam);
+      const cost = ns.cloud.getServerUpgradeCost(hostname, nextRam);
       if (cost > player.money) {
         ns.tprint(
-          `INFO Purchased server ${ns.formatRam(nextRam)} upgrade costs $${ns.formatNumber(cost)}`
+          `INFO Purchased server ${ns.format.ram(nextRam)} upgrade costs $${ns.format.number(cost)}`
         );
         return;
       }
-      ns.upgradePurchasedServer(hostname, nextRam);
+      ns.cloud.upgradeServer(hostname, nextRam);
       player.money -= cost;
     }
     ram = nextRam;
     nextRam = ram * 2;
   }
   ns.tprint(
-    `INFO ${limit} purchased servers with at least ${ns.formatRam(ram)} RAM`
+    `INFO ${limit} purchased servers with at least ${ns.format.ram(ram)} RAM`
   );
 }
 
@@ -796,6 +796,10 @@ function scanServers(ns: NS) {
     );
     hostnamesScanned.add(hostname);
     const server = ns.getServer(hostname);
+    // Ignore DarkWeb servers for now
+    if ('isOnline' in server) {
+      continue;
+    }
     if (
       server.backdoorInstalled === undefined ||
       server.baseDifficulty === undefined ||
@@ -954,7 +958,7 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
   const ramAfterPlan = plan.getRamAvailable();
   updateStatus(
     'RAM free',
-    `${ns.formatRam(ramAfterPlan)}/${ns.formatRam(ramToStart)}`
+    `${ns.format.ram(ramAfterPlan)}/${ns.format.ram(ramToStart)}`
   );
 
   const stopwatchWait = new dan.Stopwatch(ns);
@@ -962,7 +966,7 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
     await plan.exec(ns, server, updateStatus);
   }
   const timeSleep = stopwatchWait.getElapsed();
-  ns.tprint(`INFO Finished, slept ${ns.tFormat(stopwatchWait.getElapsed())}`);
+  ns.tprint(`INFO Finished, slept ${ns.format.time(timeSleep)}`);
 
   if (hacksPerBatch > 0 && plan.batches > 0) {
     const moneyPerSec =

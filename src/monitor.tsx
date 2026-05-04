@@ -100,7 +100,7 @@ export async function main(ns: NS): Promise<void> {
       <ScriptTable scriptStatus={new ScriptStatus(ns, server)} />
     </React.StrictMode>
   );
-  ns.tail();
+  ns.ui.openTail();
   // Wait forever while the signal handler above does all the actual work.
   await server.listen();
 }

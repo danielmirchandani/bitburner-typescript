@@ -39,7 +39,7 @@ export class Flags {
 }
 
 export function formatInt(ns: NS, int: number) {
-  return ns.formatNumber(int, 1, 1000, true);
+  return ns.format.number(int, 1, 1000, true);
 }
 
 export function mapIncrement<Type>(
@@ -63,7 +63,7 @@ export class SignalServer {
     this.port = ns.getPortHandle(ns.pid);
     this.port.clear();
 
-    ns.setTitle(`${ns.getScriptName()} - ${ns.pid}`);
+    ns.ui.setTailTitle(`${ns.getScriptName()} - ${ns.pid}`);
   }
 
   /**
@@ -121,7 +121,7 @@ export class Stopwatch {
   }
 
   toString() {
-    return `${this.ns.formatNumber(this.getElapsed(), 1)}ms`;
+    return `${this.ns.format.number(this.getElapsed(), 1)}ms`;
   }
 }
 
