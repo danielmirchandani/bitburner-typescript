@@ -86,12 +86,22 @@ function ScriptTable({scriptStatus}: {scriptStatus: ScriptStatus}) {
 
 export async function main(ns: NS): Promise<void> {
   const server = new dan.SignalServer(ns);
+  let keepGoing = true;
+  server.registerHandler(dan.SIGNAL_STOP, () => {
+    ns.tprint('INFO Got SIGNAL_STOP; quitting after next iteration');
+    keepGoing = false;
+  });
+  ns.disableLog('asleep');
+
   ns.printRaw(
     <React.StrictMode>
       <ScriptTable scriptStatus={new ScriptStatus(ns, server)} />
     </React.StrictMode>
   );
   ns.ui.openTail();
-  // Wait forever while the signal handler above does all the actual work.
-  await server.listen();
+
+  const neverResolves = server.listen();
+  while (keepGoing) {
+    await Promise.race([ns.asleep(1000), neverResolves]);
+  }
 }
