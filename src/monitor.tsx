@@ -51,25 +51,23 @@ class ScriptStatus {
   }
 }
 
-function ScriptRow(prop: {script: Script}) {
+function ScriptRow({script}: {script: Script}) {
   return (
     <tr>
-      <td style={{border: 'solid'}}>{prop.script.name}</td>
-      <td style={{border: 'solid', whiteSpace: 'pre-line'}}>
-        {prop.script.status}
-      </td>
+      <td style={{border: 'solid'}}>{script.name}</td>
+      <td style={{border: 'solid', whiteSpace: 'pre-line'}}>{script.status}</td>
     </tr>
   );
 }
 
-function ScriptTable(prop: {scriptStatus: ScriptStatus}) {
+function ScriptTable({scriptStatus}: {scriptStatus: ScriptStatus}) {
   const [scripts, setScripts] = React.useState(
-    prop.scriptStatus.get.bind(prop.scriptStatus)
+    scriptStatus.get.bind(scriptStatus)
   );
   React.useEffect(() => {
-    prop.scriptStatus.subscribe(setScripts);
-    return prop.scriptStatus.unsubscribe.bind(prop.scriptStatus, setScripts);
-  }, [prop.scriptStatus, setScripts]);
+    scriptStatus.subscribe(setScripts);
+    return scriptStatus.unsubscribe.bind(scriptStatus, setScripts);
+  }, [scriptStatus, setScripts]);
 
   return (
     <table style={{borderCollapse: 'collapse', width: '100%'}}>
