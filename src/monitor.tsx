@@ -61,12 +61,10 @@ function ScriptRow({script}: {script: Script}) {
 }
 
 function ScriptTable({scriptStatus}: {scriptStatus: ScriptStatus}) {
-  const [scripts, setScripts] = React.useState(
-    scriptStatus.get.bind(scriptStatus)
-  );
+  const [scripts, setScripts] = React.useState(() => scriptStatus.get());
   React.useEffect(() => {
     scriptStatus.subscribe(setScripts);
-    return scriptStatus.unsubscribe.bind(scriptStatus, setScripts);
+    return () => scriptStatus.unsubscribe(setScripts);
   }, [scriptStatus, setScripts]);
 
   return (
