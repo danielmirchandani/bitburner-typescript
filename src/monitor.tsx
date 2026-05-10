@@ -65,7 +65,7 @@ function ScriptTable({scriptStatus}: {scriptStatus: ScriptStatus}) {
   React.useEffect(() => {
     scriptStatus.subscribe(setScripts);
     return () => scriptStatus.unsubscribe(setScripts);
-  }, [scriptStatus, setScripts]);
+  }, []);
 
   return (
     <table style={{borderCollapse: 'collapse', width: '100%'}}>
