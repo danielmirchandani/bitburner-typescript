@@ -8,7 +8,7 @@ type ScriptCallback = (scripts: Readonly<Readonly<Script>[]>) => void;
 class ScriptStatus {
   private reactState: Script[] = [];
   private scripts = new Map<number, Script>();
-  private callbacks = new Map<any, ScriptCallback>();
+  private callbacks = new Set<ScriptCallback>();
 
   constructor(ns: NS, server: dan.SignalServer) {
     server.registerHandler(dan.SIGNAL_STATUS, (clientPid: number) => {
@@ -20,7 +20,7 @@ class ScriptStatus {
       this.scripts.set(clientPid, script);
       // React needs this to be a new instance to detect the change.
       this.reactState = Array.from(this.scripts.values());
-      for (const [, callback] of this.callbacks) {
+      for (const callback of this.callbacks) {
         callback(this.reactState);
       }
     });
@@ -42,12 +42,12 @@ class ScriptStatus {
     return `${pid}`;
   }
 
-  subscribe(key: any, callback: ScriptCallback) {
-    this.callbacks.set(key, callback);
+  subscribe(callback: ScriptCallback) {
+    this.callbacks.add(callback);
   }
 
-  unsubscribe(key: any) {
-    this.callbacks.delete(key);
+  unsubscribe(callback: ScriptCallback) {
+    this.callbacks.delete(callback);
   }
 }
 
@@ -63,18 +63,13 @@ function ScriptRow(prop: {script: Script}) {
 }
 
 function ScriptTable(prop: {scriptStatus: ScriptStatus}) {
-  const key = React.useRef<Symbol | null>(null);
-  if (key.current === null) {
-    key.current = Symbol();
-  }
-
   const [scripts, setScripts] = React.useState(
     prop.scriptStatus.get.bind(prop.scriptStatus)
   );
   React.useEffect(() => {
-    prop.scriptStatus.subscribe(key.current, setScripts);
-    return prop.scriptStatus.unsubscribe.bind(prop.scriptStatus, key.current);
-  }, [prop.scriptStatus, key, setScripts]);
+    prop.scriptStatus.subscribe(setScripts);
+    return prop.scriptStatus.unsubscribe.bind(prop.scriptStatus, setScripts);
+  }, [prop.scriptStatus, setScripts]);
 
   return (
     <table style={{borderCollapse: 'collapse', width: '100%'}}>
