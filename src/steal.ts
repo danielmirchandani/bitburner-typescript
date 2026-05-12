@@ -697,20 +697,27 @@ export function planPrep(ns: NS, plan: Plan): Plan {
   }
 }
 
-function purchaseServers(ns: NS, player: Player) {
+function purchaseServers(
+  ns: NS,
+  player: Player,
+  updateStatus: (key: string, value: string) => void
+) {
   const limit = ns.cloud.getServerLimit();
   let ram = 2;
   for (let i = ns.cloud.getServerNames().length; i < limit; ++i) {
     const cost = ns.cloud.getServerCost(ram);
     if (cost > player.money) {
-      ns.tprint(
-        `INFO Purchased server ${i} with ${ns.format.ram(ram)} RAM costs $${ns.format.number(cost)}`
+      updateStatus(
+        'Cloud servers',
+        `${i - 1}/${limit}, ($${ns.format.number(cost)})`
       );
       return;
     }
     ns.cloud.purchaseServer('home', ram);
     player.money -= cost;
   }
+  updateStatus('Cloud servers', `${limit} (MAX)`);
+
   const max = ns.cloud.getRamLimit();
   let nextRam = ram * 2;
   while (nextRam <= max) {
@@ -720,8 +727,9 @@ function purchaseServers(ns: NS, player: Player) {
       }
       const cost = ns.cloud.getServerUpgradeCost(hostname, nextRam);
       if (cost > player.money) {
-        ns.tprint(
-          `INFO Purchased server ${ns.format.ram(nextRam)} upgrade costs $${ns.format.number(cost)}`
+        updateStatus(
+          'Cloud RAM',
+          `${ns.format.ram(ram)}/${ns.format.ram(max)} ($${ns.format.number(cost)})`
         );
         return;
       }
@@ -731,9 +739,7 @@ function purchaseServers(ns: NS, player: Player) {
     ram = nextRam;
     nextRam = ram * 2;
   }
-  ns.tprint(
-    `INFO ${limit} purchased servers with at least ${ns.format.ram(ram)} RAM`
-  );
+  updateStatus('Cloud RAM', `${ns.format.ram(max)} (MAX)`);
 }
 
 function rootServers(ns: NS, player: Player, servers: Required<Server>[]) {
@@ -829,12 +835,18 @@ function scanServers(ns: NS) {
   return servers;
 }
 
-function suggestPorts(ns: NS, player: Player) {
+function suggestPorts(
+  ns: NS,
+  player: Player,
+  updateStatus: (key: string, value: string) => void
+) {
+  let owned = 0;
   // Don't save up for port openers (othewise we wouldn't buy anything for a
   // long time), but if we don't have one and can afford one of them already,
   // consider that money "spent" so we can afford it when we next notice.
   for (const port of PORTS) {
     if (ns.fileExists(port.file)) {
+      ++owned;
       continue;
     }
     if (port.cost > player.money) {
@@ -843,6 +855,7 @@ function suggestPorts(ns: NS, player: Player) {
     ns.tprint(`WARNING Buy ${port.file}`);
     player.money -= port.cost;
   }
+  updateStatus('Ports', `${owned}/${PORTS.length}`);
 }
 
 export class Script {
@@ -919,8 +932,8 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
   ns.tprint('INFO ---');
 
   const player = ns.getPlayer();
-  suggestPorts(ns, player);
-  purchaseServers(ns, player);
+  suggestPorts(ns, player, updateStatus);
+  purchaseServers(ns, player, updateStatus);
 
   const base = planBase(ns, player);
   updateStatus('Target', base.getTarget().hostname);
@@ -1000,5 +1013,5 @@ export async function main(ns: NS) {
       keepGoing = false;
     }
   }
-  ns.tprint('INFO Done!');
+  dan.updateStatus(ns, flags, 'Stopped');
 }
