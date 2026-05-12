@@ -588,6 +588,9 @@ function planHacksPerBatch(ns: NS, plan: Plan) {
   // goes down after this.
   const limit = Math.floor(1 / plan.multiplierHack);
   if (limit > 1_000_000) {
+    ns.tprint(
+      'WARNING Hacking would steal too little or no money; try weakening the target manually and restarting this script'
+    );
     return -1;
   }
   const ramToStart = plan.getRamAvailable();
@@ -944,9 +947,7 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
 
   let plan = planPrep(ns, base);
   const hacksPerBatch = planHacksPerBatch(ns, plan);
-  if (hacksPerBatch === -1) {
-    ns.tprint('WARNING Could not plan number of hacks per batch');
-  } else {
+  if (hacksPerBatch !== -1) {
     ns.tprint(`INFO ${hacksPerBatch} hacks per batch`);
 
     const stopwatchBatch = new dan.Stopwatch(ns);
