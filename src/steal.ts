@@ -619,7 +619,8 @@ function planHacksPerBatch(ns: NS, plan: Plan) {
     // All plans have the same wait, so we don't need to consider it.
     const moneyPossible = plan.multiplierHack * i;
     const money = Math.min(moneyPossible, plan.getTarget().moneyAvailable);
-    const efficiency = money / ramLowerBound;
+    const numBatches = Math.min(ramToStart / ramLowerBound, 100_000);
+    const efficiency = money * numBatches;
     if (efficiency <= bestEfficiency) {
       continue;
     }
