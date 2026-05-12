@@ -52,9 +52,8 @@ const SECURITY_PER_WEAKEN = 0.05;
 const WEAKENS_PER_GROW = SECURITY_PER_GROW / SECURITY_PER_WEAKEN;
 const WEAKENS_PER_HACK = SECURITY_PER_HACK / SECURITY_PER_WEAKEN;
 
-function bestTarget(ns: NS, servers: Required<Server>[]) {
+function bestTarget(ns: NS, player: Player, servers: Required<Server>[]) {
   const hasFormulas = ns.fileExists('Formulas.exe');
-  const player = ns.getPlayer();
 
   let bestEfficiency = 0;
   let bestTarget = null;
@@ -461,11 +460,10 @@ interface PlanTransaction {
   commit(): Plan;
 }
 
-function planBase(ns: NS): Plan {
-  const player = ns.getPlayer();
+function planBase(ns: NS, player: Player): Plan {
   const servers = scanServers(ns);
   const hosts = rootServers(ns, player, servers);
-  const target = bestTarget(ns, servers);
+  const target = bestTarget(ns, player, servers);
   return new Plan(
     player,
     hosts,
@@ -920,7 +918,11 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
 
   ns.tprint('INFO ---');
 
-  const base = planBase(ns);
+  const player = ns.getPlayer();
+  suggestPorts(ns, player);
+  purchaseServers(ns, player);
+
+  const base = planBase(ns, player);
   updateStatus('Target', base.getTarget().hostname);
   updateStatus('Hosts', base.getHosts().length.toString());
 
@@ -977,11 +979,6 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
         1000) /
       timeSleep;
     ns.tprint(`INFO $${dan.formatInt(ns, moneyPerSec)}/s`);
-  }
-
-  if (ramAfterPlan < ramToStart / 2) {
-    suggestPorts(ns, plan.player);
-    purchaseServers(ns, plan.player);
   }
 }
 
