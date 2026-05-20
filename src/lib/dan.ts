@@ -118,16 +118,16 @@ export class SignalServer {
 export class Stopwatch {
   private readonly start: number;
 
-  constructor(private readonly ns: NS) {
+  constructor() {
     this.start = performance.now();
+  }
+
+  format(ns: NS) {
+    return ns.format.time(this.getElapsed());
   }
 
   getElapsed() {
     return performance.now() - this.start;
-  }
-
-  toString() {
-    return `${this.ns.format.number(this.getElapsed(), 1)}ms`;
   }
 }
 

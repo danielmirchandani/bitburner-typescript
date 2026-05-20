@@ -291,13 +291,13 @@ export class Plan {
     });
 
     let execCount = 0;
-    const stopwatchExec = new dan.Stopwatch(ns);
+    const stopwatchExec = new dan.Stopwatch();
     let lastSleep = performance.now();
     for (let i = 0; i < this.scripts.length; ++i) {
       for (let j = 0; j < this.scripts[i].length; ++j) {
         ++execCount;
         if (performance.now() > lastSleep + 20) {
-          updateStatus('Exec', `${execCount} (${stopwatchExec})`);
+          updateStatus('Exec', `${execCount} (${stopwatchExec.format(ns)})`);
           await ns.asleep(0);
           lastSleep = performance.now();
         }
@@ -309,10 +309,10 @@ export class Plan {
         );
       }
     }
-    updateStatus('Exec', `${execCount} (${stopwatchExec})`);
+    updateStatus('Exec', `${execCount} (${stopwatchExec.format(ns)})`);
 
     let shares = 0;
-    const stopwatchWait = new dan.Stopwatch(ns);
+    const stopwatchWait = new dan.Stopwatch();
     while (keepGoing) {
       const duration = durationMax - stopwatchWait.getElapsed();
       updateStatus('Left', ns.format.time(duration));
@@ -951,12 +951,15 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
   if (hacksPerBatch !== -1) {
     ns.tprint(`INFO ${hacksPerBatch} hacks per batch`);
 
-    const stopwatchBatch = new dan.Stopwatch(ns);
+    const stopwatchBatch = new dan.Stopwatch();
     let lastSleep = performance.now();
     while (plan.getAwaitCount() < 1_000_000) {
       if (performance.now() > lastSleep + 20) {
-        updateStatus('Awaits', `${plan.getAwaitCount()} (${stopwatchBatch})`);
-        await ns.sleep(0);
+        updateStatus(
+          'Awaits',
+          `${plan.getAwaitCount()} (${stopwatchBatch.format(ns)})`,
+        );
+        await ns.asleep(0);
         lastSleep = performance.now();
       }
       const maybePlan = planHWGW(ns, hacksPerBatch, plan);
@@ -966,7 +969,10 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
       }
       plan = maybePlan;
     }
-    updateStatus('Awaits', `${plan.getAwaitCount()} (${stopwatchBatch})`);
+    updateStatus(
+      'Awaits',
+      `${plan.getAwaitCount()} (${stopwatchBatch.format(ns)})`,
+    );
   }
   for (const [key, count] of plan.debugStrings) {
     ns.tprint(`INFO ${key} (${count}x)`);
@@ -978,7 +984,7 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
     `${ns.format.ram(ramAfterPlan)}/${ns.format.ram(ramToStart)}`,
   );
 
-  const stopwatchWait = new dan.Stopwatch(ns);
+  const stopwatchWait = new dan.Stopwatch();
   if (!flags.dryRun()) {
     await plan.exec(ns, server, updateStatus);
   }
