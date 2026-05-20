@@ -8,16 +8,22 @@ export async function main(ns: NS): Promise<void> {
     ['target', ''],
   ]);
   if (typeof flags.delay !== 'number') {
-    throw new Error(`--delay must be a number, got ${flags.delay}`);
+    throw new Error(
+      `--delay must be a number, got ${JSON.stringify(flags.delay)}`,
+    );
   }
   if (flags.delay < 0) {
     throw new Error(`--delay must be zero or positive, got ${flags.delay}`);
   }
   if (typeof flags.server !== 'number') {
-    throw new Error(`--server must be a number, got ${flags.server}`);
+    throw new Error(
+      `--server must be a number, got ${JSON.stringify(flags.server)}`,
+    );
   }
   if (typeof flags.target !== 'string') {
-    throw new Error(`--target must be a string, got ${flags.target}`);
+    throw new Error(
+      `--target must be a string, got ${JSON.stringify(flags.target)}`,
+    );
   }
   if (flags.target === '') {
     throw new Error(`--target must not be empty`);

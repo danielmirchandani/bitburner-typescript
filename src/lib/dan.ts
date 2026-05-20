@@ -24,7 +24,7 @@ export class Flags {
   dryRun() {
     const value = this.holder.n;
     if (typeof value !== 'boolean') {
-      throw new Error(`-n must be a boolean, got ${value}`);
+      throw new Error(`-n must be a boolean, got ${JSON.stringify(value)}`);
     }
     return value;
   }
@@ -32,7 +32,9 @@ export class Flags {
   monitorPid() {
     const value = this.holder.monitor;
     if (typeof value !== 'number') {
-      throw new Error(`--monitor must be a number, got ${value}`);
+      throw new Error(
+        `--monitor must be a number, got ${JSON.stringify(value)}`,
+      );
     }
     return value;
   }
@@ -75,15 +77,19 @@ export class SignalServer {
   async listen(): Promise<void> {
     const magic = await this.nextRead();
     if (magic !== PROTOCOL_MAGIC_NUMBER) {
-      throw new Error(`Server requires magic number, got ${magic}`);
+      throw new Error(
+        `Server requires magic number, got ${JSON.stringify(magic)}`,
+      );
     }
     const clientPid = await this.nextRead();
     if (typeof clientPid !== 'number') {
-      throw new Error(`Server requires client's PID, got ${clientPid}`);
+      throw new Error(
+        `Server requires client's PID, got ${JSON.stringify(clientPid)}`,
+      );
     }
     const signal = await this.nextRead();
     if (typeof signal !== 'number') {
-      throw new Error(`Server requires signal, got ${signal}`);
+      throw new Error(`Server requires signal, got ${JSON.stringify(signal)}`);
     }
     const handler = this.handlers.get(signal);
     if (handler === undefined) {
