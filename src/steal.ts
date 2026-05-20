@@ -945,7 +945,7 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
   updateStatus('Hosts', base.getHosts().length.toString());
 
   const ramToStart = base.getRamAvailable();
-  updateStatus('RAM free', ns.formatRam(ramToStart));
+  updateStatus('RAM free', ns.format.ram(ramToStart));
 
   let plan = planPrep(ns, base);
   const hacksPerBatch = planHacksPerBatch(ns, plan);
