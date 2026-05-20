@@ -434,7 +434,7 @@ export class Plan {
       commit() {
         plan.awaits += this.scripts.reduce(
           (sum, script) => sum + script.threads.length,
-          0
+          0,
         );
         plan.batches += this.batches;
         this.debugStrings.forEach((value, key) => {
@@ -975,7 +975,7 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
   const ramAfterPlan = plan.getRamAvailable();
   updateStatus(
     'RAM free',
-    `${ns.format.ram(ramAfterPlan)}/${ns.format.ram(ramToStart)}`
+    `${ns.format.ram(ramAfterPlan)}/${ns.format.ram(ramToStart)}`,
   );
 
   const stopwatchWait = new dan.Stopwatch(ns);

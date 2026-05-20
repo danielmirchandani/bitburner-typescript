@@ -96,7 +96,7 @@ export async function main(ns: NS): Promise<void> {
   ns.printRaw(
     <React.StrictMode>
       <ScriptTable scriptStatus={new ScriptStatus(ns, server)} />
-    </React.StrictMode>
+    </React.StrictMode>,
   );
   ns.ui.openTail();
 
