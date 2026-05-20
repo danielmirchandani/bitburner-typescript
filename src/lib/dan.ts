@@ -45,7 +45,7 @@ export function formatInt(ns: NS, int: number) {
 export function mapIncrement<Type>(
   map: Map<Type, number>,
   key: Type,
-  value: number
+  value: number,
 ) {
   const previous = map.get(key);
   if (previous !== undefined) {

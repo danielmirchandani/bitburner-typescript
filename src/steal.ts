@@ -84,7 +84,7 @@ function bestTarget(ns: NS, player: Player, servers: Required<Server>[]) {
       time = Math.max(
         ns.formulas.hacking.growTime(scratch, player),
         ns.formulas.hacking.hackTime(scratch, player),
-        ns.formulas.hacking.weakenTime(scratch, player)
+        ns.formulas.hacking.weakenTime(scratch, player),
       );
     } else {
       // These aren't anywhere close to the right values, but
@@ -132,7 +132,7 @@ function bestTarget(ns: NS, player: Player, servers: Required<Server>[]) {
 
 export function exponentialSearch(
   start: number,
-  predicate: (_: number) => boolean
+  predicate: (_: number) => boolean,
 ): number {
   if (start === 0) {
     throw new Error('Cannot start exponential search at 0');
@@ -159,7 +159,7 @@ export class Host {
     readonly cpuCores: number,
     readonly hostname: string,
     public ramAvailable: number,
-    private readonly scriptRamCache: Map<string, number>
+    private readonly scriptRamCache: Map<string, number>,
   ) {}
 
   copy() {
@@ -170,7 +170,7 @@ export class Host {
       this.ramAvailable,
       // For the same host, scripts use the same RAM, so sharing the cache
       // is actually a benefit.
-      this.scriptRamCache
+      this.scriptRamCache,
     );
   }
 
@@ -182,7 +182,7 @@ export class Host {
       server.hostname === 'home'
         ? Math.max(server.maxRam - server.ramUsed - 256, 0)
         : server.maxRam - server.ramUsed,
-      new Map()
+      new Map(),
     );
   }
 
@@ -192,7 +192,7 @@ export class Host {
       ram = ns.getScriptRam(script, this.hostname);
       if (ram === 0) {
         throw new Error(
-          `${script} is either missing from ${this.hostname} or doesn't compile`
+          `${script} is either missing from ${this.hostname} or doesn't compile`,
         );
       }
       this.scriptRamCache.set(script, ram);
@@ -205,7 +205,7 @@ export function growPercentSearch(
   ns: NS,
   target: Required<Server>,
   host: Readonly<Host>,
-  threads: number
+  threads: number,
 ) {
   if (threads < 1) {
     throw new Error(`${threads} must be at least 1`);
@@ -225,7 +225,7 @@ export function growPercentSearch(
     const threadsSearch = ns.growthAnalyze(
       target.hostname,
       multiplier,
-      host.cpuCores
+      host.cpuCores,
     );
     if (threadsSearch < threads) {
       multiplierBottom = multiplier;
@@ -262,21 +262,21 @@ export class Plan {
     readonly timeGrow: number,
     readonly timeHack: number,
     readonly timeWeaken: number,
-    readonly hasFormulas: boolean
+    readonly hasFormulas: boolean,
   ) {}
 
   async exec(
     ns: NS,
     server: dan.SignalServer,
-    updateStatus: (key: string, value: string) => void
+    updateStatus: (key: string, value: string) => void,
   ) {
     const durationMax = this.scripts.reduce(
       (max, scripts) =>
         Math.max(
           max,
-          scripts.reduce((max, current) => Math.max(max, current.duration), 0)
+          scripts.reduce((max, current) => Math.max(max, current.duration), 0),
         ),
-      0
+      0,
     );
     const shareScript = 'share.js';
 
@@ -305,7 +305,7 @@ export class Plan {
           ns,
           this.target,
           durationMax,
-          i === this.scripts.length - 1 && j === this.scripts[i].length - 1
+          i === this.scripts.length - 1 && j === this.scripts[i].length - 1,
         );
       }
     }
@@ -343,8 +343,8 @@ export class Plan {
             shareScript,
             host.hostname,
             {temporary: true, threads: threads},
-            `--server=${i !== shareHosts.length - 1 ? -1 : ns.pid}`
-          )
+            `--server=${i !== shareHosts.length - 1 ? -1 : ns.pid}`,
+          ),
         );
       }
       await Promise.race([planDone, shareDone]);
@@ -378,19 +378,19 @@ export class Plan {
     ns: NS,
     target: Readonly<Required<Server>>,
     grows: number,
-    host: Readonly<Host>
+    host: Readonly<Host>,
   ) {
     if (this.hasFormulas) {
       return ns.formulas.hacking.growAmount(
         target,
         this.player,
         grows,
-        host.cpuCores
+        host.cpuCores,
       );
     } else {
       return Math.min(
         target.moneyAvailable * growPercentSearch(ns, target, host, grows),
-        target.moneyMax
+        target.moneyMax,
       );
     }
   }
@@ -398,14 +398,14 @@ export class Plan {
   growThreads(
     ns: NS,
     target: Readonly<Required<Server>>,
-    host: Readonly<Host>
+    host: Readonly<Host>,
   ) {
     if (this.hasFormulas) {
       return ns.formulas.hacking.growThreads(
         target,
         this.player,
         target.moneyMax,
-        host.cpuCores
+        host.cpuCores,
       );
     } else {
       const multiplier =
@@ -472,7 +472,7 @@ function planBase(ns: NS, player: Player): Plan {
     ns.getGrowTime(target.hostname),
     ns.getHackTime(target.hostname),
     ns.getWeakenTime(target.hostname),
-    ns.fileExists('Formulas.exe')
+    ns.fileExists('Formulas.exe'),
   );
 }
 
@@ -528,7 +528,7 @@ export function planHWGW(ns: NS, hacks: number, plan: Plan): Plan | null {
   const weakensHack = scriptHackWeaken.reserveThreadsFromStart(
     ns,
     weakensHackWanted,
-    txn.hosts
+    txn.hosts,
   );
   if (weakensHack !== weakensHackWanted) {
     return null;
@@ -561,7 +561,7 @@ export function planHWGW(ns: NS, hacks: number, plan: Plan): Plan | null {
   const weakensGrow = scriptGrowWeaken.reserveThreadsFromStart(
     ns,
     weakensGrowWanted,
-    txn.hosts
+    txn.hosts,
   );
   if (weakensGrow !== weakensGrowWanted) {
     return null;
@@ -570,7 +570,7 @@ export function planHWGW(ns: NS, hacks: number, plan: Plan): Plan | null {
 
   txn.batches += 1;
   txn.addDebugString(
-    `${hacks} hack, ${weakensHack} weaken, ${growsTotal} grow, ${weakensGrow} weaken`
+    `${hacks} hack, ${weakensHack} weaken, ${growsTotal} grow, ${weakensGrow} weaken`,
   );
   return txn.commit();
 }
@@ -589,7 +589,7 @@ function planHacksPerBatch(ns: NS, plan: Plan) {
   const limit = Math.floor(1 / plan.multiplierHack);
   if (limit > 1_000_000) {
     ns.tprint(
-      'WARNING Hacking would steal too little or no money; try weakening the target manually and restarting this script'
+      'WARNING Hacking would steal too little or no money; try weakening the target manually and restarting this script',
     );
     return -1;
   }
@@ -638,14 +638,14 @@ export function planPrep(ns: NS, plan: Plan): Plan {
   if (securityWeakenInitial > 0) {
     const scriptWeaken = Script.newWeaken(plan);
     const weakensWanted = Math.ceil(
-      securityWeakenInitial / SECURITY_PER_WEAKEN
+      securityWeakenInitial / SECURITY_PER_WEAKEN,
     );
     // Take all the weakens we can get, but bail early if we couldn't get
     // all of them so the next iteration can keep prepping.
     const weakens = scriptWeaken.reserveThreadsFromStart(
       ns,
       weakensWanted,
-      txn.hosts
+      txn.hosts,
     );
     txn.scripts.push(scriptWeaken);
     txn.target.hackDifficulty -= SECURITY_PER_WEAKEN * weakens;
@@ -659,14 +659,14 @@ export function planPrep(ns: NS, plan: Plan): Plan {
   // `growthAnalyze` error is too large for us for multipliers this large.
   if (!plan.hasFormulas && txn.target.moneyAvailable <= 1) {
     ns.tprint(
-      `ERROR "${txn.target.hostname}" < $1; if this repeats, stop the script.`
+      `ERROR "${txn.target.hostname}" < $1; if this repeats, stop the script.`,
     );
 
     const scriptGrow = Script.newGrow(plan);
     const grows = scriptGrow.reserveThreadsOnHost(
       ns,
       Number.POSITIVE_INFINITY,
-      txn.hosts[txn.hosts.length - 1]
+      txn.hosts[txn.hosts.length - 1],
     );
     txn.scripts.push(scriptGrow);
 
@@ -674,7 +674,7 @@ export function planPrep(ns: NS, plan: Plan): Plan {
     const weakens = scriptWeaken.reserveThreadsFromStart(
       ns,
       Math.ceil(grows * WEAKENS_PER_GROW),
-      txn.hosts
+      txn.hosts,
     );
     txn.scripts.push(scriptWeaken);
 
@@ -704,7 +704,7 @@ export function planPrep(ns: NS, plan: Plan): Plan {
 function purchaseServers(
   ns: NS,
   player: Player,
-  updateStatus: (key: string, value: string) => void
+  updateStatus: (key: string, value: string) => void,
 ) {
   const limit = ns.cloud.getServerLimit();
   let ram = 2;
@@ -713,7 +713,7 @@ function purchaseServers(
     if (cost > player.money) {
       updateStatus(
         'Cloud servers',
-        `${i - 1}/${limit}, ($${ns.format.number(cost)})`
+        `${i - 1}/${limit}, ($${ns.format.number(cost)})`,
       );
       return;
     }
@@ -733,7 +733,7 @@ function purchaseServers(
       if (cost > player.money) {
         updateStatus(
           'Cloud RAM',
-          `${ns.format.ram(ram)}/${ns.format.ram(max)} ($${ns.format.number(cost)})`
+          `${ns.format.ram(ram)}/${ns.format.ram(max)} ($${ns.format.number(cost)})`,
         );
         return;
       }
@@ -759,7 +759,7 @@ function rootServers(ns: NS, player: Player, servers: Required<Server>[]) {
     if (!server.hasAdminRights) {
       if (server.numOpenPortsRequired >= PORTS.length) {
         throw new Error(
-          `"${server.hostname}" requires ${server.numOpenPortsRequired} open ports`
+          `"${server.hostname}" requires ${server.numOpenPortsRequired} open ports`,
         );
       }
       if (server.requiredHackingSkill > player.skills.hacking) {
@@ -800,7 +800,7 @@ function scanServers(ns: NS) {
   const servers: Required<Server>[] = [];
   for (const hostname of hostnamesToScan) {
     hostnamesToScan.push(
-      ...ns.scan(hostname).filter(next => !hostnamesScanned.has(next))
+      ...ns.scan(hostname).filter(next => !hostnamesScanned.has(next)),
     );
     hostnamesScanned.add(hostname);
     const server = ns.getServer(hostname);
@@ -842,7 +842,7 @@ function scanServers(ns: NS) {
 function suggestPorts(
   ns: NS,
   player: Player,
-  updateStatus: (key: string, value: string) => void
+  updateStatus: (key: string, value: string) => void,
 ) {
   let owned = 0;
   // Don't save up for port openers (othewise we wouldn't buy anything for a
@@ -867,7 +867,7 @@ export class Script {
 
   private constructor(
     readonly path: string,
-    readonly duration: number
+    readonly duration: number,
   ) {}
 
   exec(ns: NS, target: Readonly<Server>, endMs: number, signalOnLast: boolean) {
@@ -880,7 +880,7 @@ export class Script {
         {temporary: true, threads: reservation.threads},
         `--delay=${delay}`,
         `--server=${!signalOnLast || i !== this.threads.length - 1 ? -1 : ns.pid}`,
-        `--target=${target.hostname}`
+        `--target=${target.hostname}`,
       );
     }
   }
