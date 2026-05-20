@@ -26,7 +26,7 @@ export async function main(ns: NS): Promise<void> {
     );
   }
   if (flags.target === '') {
-    throw new Error(`--target must not be empty`);
+    throw new Error('--target must not be empty');
   }
   await ns.grow(flags.target, {additionalMsec: flags.delay});
   if (flags.server !== -1) {
