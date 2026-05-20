@@ -419,31 +419,31 @@ export class Plan {
   }
 
   transaction(): PlanTransaction {
-    const plan = this;
     return {
       batches: 0,
       debugStrings: new Map(),
-      hosts: plan.hosts.map(host => host.copy()),
+      hosts: this.hosts.map(host => host.copy()),
+      plan: this,
       scripts: [],
-      target: {...plan.target},
+      target: {...this.target},
 
       addDebugString(key: string) {
         dan.mapIncrement(this.debugStrings, key, 1);
       },
 
       commit() {
-        plan.awaits += this.scripts.reduce(
+        this.plan.awaits += this.scripts.reduce(
           (sum, script) => sum + script.threads.length,
           0,
         );
-        plan.batches += this.batches;
+        this.plan.batches += this.batches;
         this.debugStrings.forEach((value, key) => {
-          dan.mapIncrement(plan.debugStrings, key, value);
+          dan.mapIncrement(this.plan.debugStrings, key, value);
         });
-        plan.hosts = this.hosts;
-        plan.scripts.push(this.scripts);
-        plan.target = this.target;
-        return plan;
+        this.plan.hosts = this.hosts;
+        this.plan.scripts.push(this.scripts);
+        this.plan.target = this.target;
+        return this.plan;
       },
     };
   }
@@ -453,6 +453,7 @@ interface PlanTransaction {
   batches: number;
   debugStrings: Map<string, number>;
   hosts: Host[];
+  plan: Plan;
   scripts: Script[];
   target: Required<Server>;
 
