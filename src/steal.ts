@@ -4,46 +4,46 @@ import * as dan from './lib/dan.js';
 type Port = {
   readonly cost: number;
   readonly file: string;
-  readonly getOpener: (ns: NS) => (hostname: string) => void;
   readonly isOpen: (server: Server) => boolean;
+  readonly open: (ns: NS, hostname: string) => boolean;
 };
 
 const PORTS: Port[] = [
   {
     cost: 0,
     file: 'NUKE.exe',
-    getOpener: (ns: NS) => ns.nuke,
     isOpen: (server: Server) => server.hasAdminRights,
+    open: (ns: NS, hostname: string) => ns.nuke(hostname),
   },
   {
     cost: 500_000,
     file: 'BruteSSH.exe',
-    getOpener: (ns: NS) => ns.brutessh,
     isOpen: (server: Server) => server.sshPortOpen,
+    open: (ns: NS, hostname: string) => ns.brutessh(hostname),
   },
   {
     cost: 1_500_000,
     file: 'FTPCrack.exe',
-    getOpener: (ns: NS) => ns.ftpcrack,
     isOpen: (server: Server) => server.ftpPortOpen,
+    open: (ns: NS, hostname: string) => ns.ftpcrack(hostname),
   },
   {
     cost: 5_000_000,
     file: 'relaySMTP.exe',
-    getOpener: (ns: NS) => ns.relaysmtp,
     isOpen: (server: Server) => server.smtpPortOpen,
+    open: (ns: NS, hostname: string) => ns.relaysmtp(hostname),
   },
   {
     cost: 30_000_000,
     file: 'HTTPWorm.exe',
-    getOpener: (ns: NS) => ns.httpworm,
     isOpen: (server: Server) => server.httpPortOpen,
+    open: (ns: NS, hostname: string) => ns.httpworm(hostname),
   },
   {
     cost: 250_000_000,
     file: 'SQLInject.exe',
-    getOpener: (ns: NS) => ns.sqlinject,
     isOpen: (server: Server) => server.sqlPortOpen,
+    open: (ns: NS, hostname: string) => ns.sqlinject(hostname),
   },
 ];
 const SECURITY_PER_GROW = 0.004;
@@ -775,7 +775,7 @@ function rootServers(ns: NS, player: Player, servers: Required<Server>[]) {
           anyClosed = true;
           break;
         }
-        port.getOpener(ns)(server.hostname);
+        port.open(ns, server.hostname);
       }
       if (anyClosed) {
         continue;
