@@ -1,10 +1,17 @@
 {
   "extends": "./node_modules/gts/tsconfig-google.json",
   "compilerOptions": {
+    // gts override - required by `--moduleResolution=bundler`
+    "module": "preserve",
+    // required by vitest (see the Vite team's general opinion on this at
+    // https://github.com/vitejs/vite-plugin-react/issues/104#issuecomment-1484202717).
+    "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    // gts override - "DOM" provides types for `window`, and NS2 scripts can use
-    // React via `window.React`.
-    "lib": ["DOM", "es2018"],
+    "lib": [
+      // gts override - required by vite, indirectly by vitest
+      "DOM",
+      "es2018"
+    ],
     "noImplicitThis": true,
     // Bitburner can run the TypeScript files directly
     "noEmit": true,

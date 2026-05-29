@@ -19,6 +19,7 @@
   },
   "author": "hydroflame, Hoekstraa, based on work by SlyCedix",
   "devDependencies": {
+    "@types/node": "^22.7.5",
     "@types/react": "^18.2.18",
     "@types/react-dom": "^18.2.7",
     "bitburner-filesync": "^1.1.5",
@@ -29,5 +30,11 @@
     "sync-directory": "^5.1.7",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
+  },
+  "json-comments": {
+    "tips": "Please install the JsonComments plugin to enable commenting functionality for JSON files, see: https://github.com/zhangfisher/json_comments_extension",
+    "bitburner-typescript/package.json": {
+      "devDependencies.@types/node": "@vitest packages don't properly declare this dependency"
+    }
   }
 }
