@@ -1,5 +1,4 @@
-import type {NS, Player, Server} from '../NetscriptDefinitions.d.ts';
-import * as dan from './lib/dan.js';
+import * as dan from './lib/dan.ts';
 
 type Port = {
   readonly cost: number;
@@ -66,9 +65,9 @@ function bestTarget(ns: NS, player: Player, servers: Required<Server>[]) {
     }
 
     // TODO: what hostname should these use?
-    const ramPerGrow = ns.getScriptRam('grow.js', target.hostname);
-    const ramPerHack = ns.getScriptRam('hack.js', target.hostname);
-    const ramPerWeaken = ns.getScriptRam('weaken.js', target.hostname);
+    const ramPerGrow = ns.getScriptRam('grow.ts', target.hostname);
+    const ramPerHack = ns.getScriptRam('hack.ts', target.hostname);
+    const ramPerWeaken = ns.getScriptRam('weaken.ts', target.hostname);
 
     // These are as if the server is fully grown and weakened.
     let chance;
@@ -278,7 +277,7 @@ export class Plan {
         ),
       0,
     );
-    const shareScript = 'share.js';
+    const shareScript = 'share.ts';
 
     let keepGoing = true;
     let sharePids: number[] = [];
@@ -606,10 +605,10 @@ function planHacksPerBatch(ns: NS, plan: Plan) {
     const grows = plan.growThreads(ns, plan.getTarget(), worstHost);
     const weakensGrow = Math.ceil(WEAKENS_PER_GROW * grows);
     const ramLowerBound =
-      i * bestHost.getScriptRam(ns, 'hack.js') +
-      weakensHack * bestHost.getScriptRam(ns, 'weaken.js') +
-      grows * worstHost.getScriptRam(ns, 'grow.js') +
-      weakensGrow * bestHost.getScriptRam(ns, 'weaken.js');
+      i * bestHost.getScriptRam(ns, 'hack.ts') +
+      weakensHack * bestHost.getScriptRam(ns, 'weaken.ts') +
+      grows * worstHost.getScriptRam(ns, 'grow.ts') +
+      weakensGrow * bestHost.getScriptRam(ns, 'weaken.ts');
 
     // Scripts don't pack 100% effectively, so arbitrarily say 50% of total
     // host RAM is the threshold for too-big batches.
@@ -748,7 +747,7 @@ function purchaseServers(
 }
 
 function rootServers(ns: NS, player: Player, servers: Required<Server>[]) {
-  const files = ['grow.js', 'hack.js', 'lib/dan.js', 'share.js', 'weaken.js'];
+  const files = ['grow.ts', 'hack.ts', 'lib/dan.ts', 'share.ts', 'weaken.ts'];
   const hosts: Host[] = [];
   for (const server of servers) {
     if (server.maxRam === 0) {
@@ -887,15 +886,15 @@ export class Script {
   }
 
   static newGrow(plan: Plan) {
-    return new Script('grow.js', plan.timeGrow);
+    return new Script('grow.ts', plan.timeGrow);
   }
 
   static newHack(plan: Plan) {
-    return new Script('hack.js', plan.timeHack);
+    return new Script('hack.ts', plan.timeHack);
   }
 
   static newWeaken(plan: Plan) {
-    return new Script('weaken.js', plan.timeWeaken);
+    return new Script('weaken.ts', plan.timeWeaken);
   }
 
   reserveThreadsFromStart(ns: NS, threadsWanted: number, hosts: Host[]) {

@@ -1,6 +1,4 @@
-import * as dan from './lib/dan.js';
-import type {NS} from '../NetscriptDefinitions.d.ts';
-import React from './lib/react.js';
+import * as dan from './lib/dan.ts';
 
 type Script = {name: string; pid: number; status: string};
 type ScriptCallback = (scripts: Readonly<Readonly<Script>[]>) => void;

@@ -1,5 +1,3 @@
-import type {NS, ScriptArg} from '../../NetscriptDefinitions.d.ts';
-
 const PROTOCOL_MAGIC_NUMBER = 84;
 export const SIGNAL_STOP = 3;
 // export const SIGNAL_NEXT = 4;

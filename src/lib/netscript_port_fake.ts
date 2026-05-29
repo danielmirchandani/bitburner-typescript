@@ -1,5 +1,3 @@
-import type {NetscriptPort} from '../../NetscriptDefinitions.d.ts';
-
 export default class NetscriptPortFake implements NetscriptPort {
   static readonly EMPTY_PORT_VALUE = 'NULL PORT DATA';
 

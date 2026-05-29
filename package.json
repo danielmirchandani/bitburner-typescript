@@ -9,18 +9,13 @@
   "scripts": {
     "clean": "gts clean",
     "compile": "tsc",
+    "filesync": "bitburner-filesync",
     "fix": "gts fix",
     "lint": "gts lint",
     "prepare": "npm.cmd run compile",
     "pretest": "npm.cmd run compile",
     "posttest": "npm.cmd run lint",
-    "test": "vitest",
-    "watch:transpile": "tsc -w --preserveWatchOutput",
-    "watch:local": "node build/watch.cjs",
-    "watch:remote": "bitburner-filesync",
-    "watch:init": "node build/init.cjs",
-    "watch:all": "concurrently npm:watch:transpile npm:watch:local npm:watch:remote",
-    "watch": "npm run watch:init && npm run watch:all"
+    "test": "vitest"
   },
   "author": "hydroflame, Hoekstraa, based on work by SlyCedix",
   "devDependencies": {

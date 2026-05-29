@@ -1,5 +1,4 @@
-import * as dan from './lib/dan.js';
-import type {NS} from '../NetscriptDefinitions.d.ts';
+import * as dan from './lib/dan.ts';
 
 export async function main(ns: NS) {
   const flags = ns.flags([['server', -1]]);
