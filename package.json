@@ -19,6 +19,7 @@
   },
   "author": "hydroflame, Hoekstraa, based on work by SlyCedix",
   "devDependencies": {
+    "@eslint/config-helpers": "^0.4.0",
     "@types/node": "^22.7.5",
     "@types/react": "^18.2.18",
     "@types/react-dom": "^18.2.7",
@@ -34,7 +35,8 @@
   "json-comments": {
     "tips": "Please install the JsonComments plugin to enable commenting functionality for JSON files, see: https://github.com/zhangfisher/json_comments_extension",
     "bitburner-typescript/package.json": {
-      "devDependencies.@types/node": "@vitest packages don't properly declare this dependency"
+      "devDependencies.@types/node": "@vitest packages don't properly declare this dependency",
+      "devDependencies.@eslint/config-helpers": "gts doesn't properly declare this dependency"
     }
   }
 }
