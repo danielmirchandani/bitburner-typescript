@@ -1,0 +1,12 @@
+{
+  "extends": "../node_modules/gts/tsconfig-google.json",
+  "include": ["*.d.ts", "*.ts"],
+  "compilerOptions": {
+    "allowJs": true,
+    "module": "preserve",
+    "outDir": "dist/",
+    "removeComments": true,
+    "sourceMap": false,
+    "strict": false
+  }
+}
