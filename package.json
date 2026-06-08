@@ -5,7 +5,6 @@
     "src/"
   ],
   "private": true,
-  "type": "module",
   "scripts": {
     "arcade": "tsc --project arcade/tsconfig.json --watch --preserveWatchOutput",
     "clean": "gts clean",
