@@ -733,7 +733,9 @@ function purchaseServers(
       if (cost > player.money) {
         updateStatus(
           'Cloud RAM',
-          `${ns.format.ram(ram)}/${ns.format.ram(max)} ($${ns.format.number(cost)})`,
+          `${ns.format.ram(ram)}/${ns.format.ram(max)} ($${ns.format.number(
+            cost,
+          )})`,
         );
         return;
       }
@@ -865,10 +867,7 @@ function suggestPorts(
 export class Script {
   readonly threads: ThreadReservation[] = [];
 
-  private constructor(
-    readonly path: string,
-    readonly duration: number,
-  ) {}
+  private constructor(readonly path: string, readonly duration: number) {}
 
   exec(ns: NS, target: Readonly<Server>, endMs: number, signalOnLast: boolean) {
     const delay = endMs - this.duration;
@@ -879,7 +878,9 @@ export class Script {
         reservation.host.hostname,
         {temporary: true, threads: reservation.threads},
         `--delay=${delay}`,
-        `--server=${!signalOnLast || i !== this.threads.length - 1 ? -1 : ns.pid}`,
+        `--server=${
+          !signalOnLast || i !== this.threads.length - 1 ? -1 : ns.pid
+        }`,
         `--target=${target.hostname}`,
       );
     }
