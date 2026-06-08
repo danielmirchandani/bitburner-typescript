@@ -991,14 +991,10 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
   const timeSleep = stopwatchWait.getElapsed();
   ns.tprint(`INFO Finished, slept ${ns.format.time(timeSleep)}`);
 
-  if (hacksPerBatch > 0 && plan.batches > 0) {
-    const moneyPerSec =
-      (plan.multiplierHack *
-        hacksPerBatch *
-        plan.batches *
-        plan.target.moneyMax *
-        1000) /
-      timeSleep;
+  if (hacksPerBatch !== -1 && plan.getBatches() > 0) {
+    const moneyPerHack = plan.getTarget().moneyMax * plan.multiplierHack;
+    const moneyPerPlan = moneyPerHack * hacksPerBatch * plan.getBatches();
+    const moneyPerSec = (moneyPerPlan * 1000) / timeSleep;
     ns.tprint(`INFO $${ns.format.number(moneyPerSec)}/s`);
   }
 }
