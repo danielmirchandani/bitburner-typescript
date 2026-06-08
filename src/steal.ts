@@ -806,10 +806,6 @@ function scanServers(ns: NS) {
     );
     hostnamesScanned.add(hostname);
     const server = ns.getServer(hostname);
-    // Ignore DarkWeb servers for now
-    if ('isOnline' in server) {
-      continue;
-    }
     if (
       server.backdoorInstalled === undefined ||
       server.baseDifficulty === undefined ||
