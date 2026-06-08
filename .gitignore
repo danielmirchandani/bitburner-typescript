@@ -1,3 +1,4 @@
+arcade/dist/
 node_modules/
 NetscriptDefinitions.d.ts
 tsconfig.tsbuildinfo
