@@ -3,7 +3,9 @@ import * as dan from './lib/dan.ts';
 export async function main(ns: NS) {
   const flags = ns.flags([['server', -1]]);
   if (typeof flags.server !== 'number') {
-    throw new Error(`--server must be a number, got ${flags.server}`);
+    throw new Error(
+      `--server must be a number, got ${JSON.stringify(flags.server)}`,
+    );
   }
   await ns.share();
   if (flags.server !== -1) {
