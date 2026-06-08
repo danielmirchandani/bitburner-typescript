@@ -999,7 +999,7 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
         plan.target.moneyMax *
         1000) /
       timeSleep;
-    ns.tprint(`INFO $${dan.formatInt(ns, moneyPerSec)}/s`);
+    ns.tprint(`INFO $${ns.format.number(moneyPerSec)}/s`);
   }
 }
 

@@ -38,10 +38,6 @@ export class Flags {
   }
 }
 
-export function formatInt(ns: NS, int: number) {
-  return ns.format.number(int, 1, 1000, true);
-}
-
 export function mapIncrement<Type>(
   map: Map<Type, number>,
   key: Type,
