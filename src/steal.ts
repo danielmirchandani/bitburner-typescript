@@ -260,7 +260,7 @@ export class Plan {
       this._hacks = -1;
       return;
     }
-    const bestHost = this.hosts[this.hosts.length - 1];
+
     const worstHost = this.hosts[0];
 
     let bestEfficiency = 0;
@@ -268,11 +268,13 @@ export class Plan {
       const weakensHack = Math.ceil(WEAKENS_PER_HACK * i);
       const grows = this.growThreads(ns, this.target, worstHost);
       const weakensGrow = Math.ceil(WEAKENS_PER_GROW * grows);
+      // All hosts have the same copy of the script (see `rootServers`) so use
+      // any host convenient to calculate RAM costs.
       const ramLowerBound =
-        i * bestHost.getScriptRam(ns, 'hack.ts') +
-        weakensHack * bestHost.getScriptRam(ns, 'weaken.ts') +
+        i * worstHost.getScriptRam(ns, 'hack.ts') +
+        weakensHack * worstHost.getScriptRam(ns, 'weaken.ts') +
         grows * worstHost.getScriptRam(ns, 'grow.ts') +
-        weakensGrow * bestHost.getScriptRam(ns, 'weaken.ts');
+        weakensGrow * worstHost.getScriptRam(ns, 'weaken.ts');
 
       // All plans have the same wait, so we don't need to consider it.
       const moneyPossible = this.multiplierHack * i;
