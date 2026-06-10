@@ -204,21 +204,41 @@ export function growPercentSearch(
 }
 
 export class Plan {
-  private awaits = 0;
-  private batches: number = 0;
-  readonly debugStrings = new Map<string, number>();
+  private _awaits = 0;
+  private _batches: number = 0;
+  private _debugStrings = new Map<string, number>();
   private scripts: Readonly<Script>[][] = [];
 
   constructor(
     readonly player: Readonly<Player>,
-    private hosts: Readonly<Host>[],
-    private target: Readonly<Required<Server>>,
+    private _hosts: Readonly<Host>[],
+    private _target: Readonly<Required<Server>>,
     readonly multiplierHack: number,
     private timeGrow: number,
     private timeHack: number,
     private timeWeaken: number,
     readonly hasFormulas: boolean,
   ) {}
+
+  get awaits() {
+    return this._awaits;
+  }
+
+  get batches() {
+    return this._batches;
+  }
+
+  get debugStrings(): ReadonlyMap<string, number> {
+    return this._debugStrings;
+  }
+
+  get hosts():Readonly<Readonly<Host>[]> {
+    return this._hosts;
+  }
+
+  get target() {
+    return this._target;
+  }
 
   async exec(
     ns: NS,
@@ -309,24 +329,8 @@ export class Plan {
     }
   }
 
-  getAwaitCount() {
-    return this.awaits;
-  }
-
-  getBatches() {
-    return this.batches;
-  }
-
-  getHosts(): Readonly<Readonly<Host>[]> {
-    return this.hosts;
-  }
-
   getRamAvailable() {
     return this.hosts.reduce((sum, host) => sum + host.ramAvailable, 0);
-  }
-
-  getTarget() {
-    return this.target;
   }
 
   growAmount(
@@ -387,17 +391,17 @@ export class Plan {
       },
 
       commit() {
-        this.plan.awaits += this.scripts.reduce(
+        this.plan._awaits += this.scripts.reduce(
           (sum, script) => sum + script.threads.length,
           0,
         );
-        this.plan.batches += this.batches;
+        this.plan._batches += this.batches;
         this.debugStrings.forEach((value, key) => {
-          dan.mapIncrement(this.plan.debugStrings, key, value);
+          dan.mapIncrement(this.plan._debugStrings, key, value);
         });
-        this.plan.hosts = this.hosts;
+        this.plan._hosts = this.hosts;
         this.plan.scripts.push(this.scripts);
-        this.plan.target = this.target;
+        this.plan._target = this.target;
         return this.plan;
       },
 
@@ -565,7 +569,7 @@ function planHacksPerBatch(ns: NS, plan: Plan) {
     return -1;
   }
   const ramToStart = plan.getRamAvailable();
-  const hosts = plan.getHosts();
+  const hosts = plan.hosts;
   const bestHost = hosts[hosts.length - 1];
   const worstHost = hosts[0];
 
@@ -573,7 +577,7 @@ function planHacksPerBatch(ns: NS, plan: Plan) {
   let bestHacks = -1;
   for (let i = 1; i <= limit; ++i) {
     const weakensHack = Math.ceil(WEAKENS_PER_HACK * i);
-    const grows = plan.growThreads(ns, plan.getTarget(), worstHost);
+    const grows = plan.growThreads(ns, plan.target, worstHost);
     const weakensGrow = Math.ceil(WEAKENS_PER_GROW * grows);
     const ramLowerBound =
       i * bestHost.getScriptRam(ns, 'hack.ts') +
@@ -589,7 +593,7 @@ function planHacksPerBatch(ns: NS, plan: Plan) {
 
     // All plans have the same wait, so we don't need to consider it.
     const moneyPossible = plan.multiplierHack * i;
-    const money = Math.min(moneyPossible, plan.getTarget().moneyAvailable);
+    const money = Math.min(moneyPossible, plan.target.moneyAvailable);
     const numBatches = Math.min(ramToStart / ramLowerBound, 100_000);
     const efficiency = money * numBatches;
     if (efficiency <= bestEfficiency) {
@@ -893,8 +897,8 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
   purchaseServers(ns, player, updateStatus);
 
   const base = planBase(ns, player);
-  updateStatus('Target', base.getTarget().hostname);
-  updateStatus('Hosts', base.getHosts().length.toString());
+  updateStatus('Target', base.target.hostname);
+  updateStatus('Hosts', base.hosts.length.toString());
 
   const ramToStart = base.getRamAvailable();
   updateStatus('RAM free', ns.format.ram(ramToStart));
@@ -906,12 +910,9 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
 
     const stopwatchBatch = new dan.Stopwatch();
     let lastSleep = performance.now();
-    while (plan.getAwaitCount() < 1_000_000) {
+    while (plan.awaits < 1_000_000) {
       if (performance.now() > lastSleep + 20) {
-        updateStatus(
-          'Awaits',
-          `${plan.getAwaitCount()} (${stopwatchBatch.format(ns)})`,
-        );
+        updateStatus('Awaits', `${plan.awaits} (${stopwatchBatch.format(ns)})`);
         await ns.asleep(0);
         lastSleep = performance.now();
       }
@@ -922,10 +923,7 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
       }
       plan = maybePlan;
     }
-    updateStatus(
-      'Awaits',
-      `${plan.getAwaitCount()} (${stopwatchBatch.format(ns)})`,
-    );
+    updateStatus('Awaits', `${plan.awaits} (${stopwatchBatch.format(ns)})`);
   }
   for (const [key, count] of plan.debugStrings) {
     ns.tprint(`INFO ${key} (${count}x)`);
@@ -944,9 +942,9 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
   const timeSleep = stopwatchWait.getElapsed();
   ns.tprint(`INFO Finished, slept ${ns.format.time(timeSleep)}`);
 
-  if (hacksPerBatch !== -1 && plan.getBatches() > 0) {
-    const moneyPerHack = plan.getTarget().moneyMax * plan.multiplierHack;
-    const moneyPerPlan = moneyPerHack * hacksPerBatch * plan.getBatches();
+  if (plan.hacks !== -1 && plan.batches > 0) {
+    const moneyPerHack = plan.target.moneyMax * plan.multiplierHack;
+    const moneyPerPlan = moneyPerHack * hacksPerBatch * plan.batches;
     const moneyPerSec = (moneyPerPlan * 1000) / timeSleep;
     ns.tprint(`INFO $${ns.format.number(moneyPerSec)}/s`);
   }
