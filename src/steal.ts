@@ -214,9 +214,9 @@ export class Plan {
     private hosts: Readonly<Host>[],
     private target: Readonly<Required<Server>>,
     readonly multiplierHack: number,
-    readonly timeGrow: number,
-    readonly timeHack: number,
-    readonly timeWeaken: number,
+    private timeGrow: number,
+    private timeHack: number,
+    private timeWeaken: number,
     readonly hasFormulas: boolean,
   ) {}
 
@@ -400,6 +400,24 @@ export class Plan {
         this.plan.target = this.target;
         return this.plan;
       },
+
+      newGrow() {
+        const script = new Script('grow.ts', this.plan.timeGrow);
+        this.scripts.push(script);
+        return script;
+      },
+
+      newHack() {
+        const script = new Script('hack.ts', this.plan.timeHack);
+        this.scripts.push(script);
+        return script;
+      },
+
+      newWeaken() {
+        const script = new Script('weaken.ts', this.plan.timeWeaken);
+        this.scripts.push(script);
+        return script;
+      },
     };
   }
 }
@@ -414,6 +432,9 @@ interface PlanTransaction {
 
   addDebugString(key: string): void;
   commit(): Plan;
+  newGrow(): Script;
+  newHack(): Script;
+  newWeaken(): Script;
 }
 
 function planBase(ns: NS, player: Player): Plan {
@@ -435,7 +456,7 @@ function planBase(ns: NS, player: Player): Plan {
 function planGrow(ns: NS, grows: number, plan: Plan) {
   const txn = plan.transaction();
 
-  const scriptGrow = Script.newGrow(plan);
+  const scriptGrow = txn.newGrow();
   let growsLeft = grows;
   for (let i = txn.hosts.length - 1; i >= 0 && growsLeft > 0; --i) {
     const host = txn.hosts[i];
@@ -453,16 +474,14 @@ function planGrow(ns: NS, grows: number, plan: Plan) {
   if (growsLeft > 0) {
     return null;
   }
-  txn.scripts.push(scriptGrow);
 
-  const scriptWeaken = Script.newWeaken(plan);
+  const scriptWeaken = txn.newWeaken();
   const weakens = Math.ceil(grows * WEAKENS_PER_GROW);
   if (
     scriptWeaken.reserveThreadsFromStart(ns, weakens, txn.hosts) !== weakens
   ) {
     return null;
   }
-  txn.scripts.push(scriptWeaken);
 
   txn.addDebugString(`${grows} grow, ${weakens} weaken`);
   return txn;
@@ -471,15 +490,14 @@ function planGrow(ns: NS, grows: number, plan: Plan) {
 export function planHWGW(ns: NS, hacks: number, plan: Plan): Plan | null {
   const txn = plan.transaction();
 
-  const scriptHack = Script.newHack(plan);
+  const scriptHack = txn.newHack();
   if (scriptHack.reserveThreadsFromStart(ns, hacks, txn.hosts) !== hacks) {
     return null;
   }
   const money = txn.target.moneyMax * plan.multiplierHack * hacks;
-  txn.scripts.push(scriptHack);
   txn.target.moneyAvailable -= Math.min(money, txn.target.moneyAvailable);
 
-  const scriptHackWeaken = Script.newWeaken(plan);
+  const scriptHackWeaken = txn.newWeaken();
   const weakensHackWanted = Math.ceil(WEAKENS_PER_HACK * hacks);
   const weakensHack = scriptHackWeaken.reserveThreadsFromStart(
     ns,
@@ -489,9 +507,8 @@ export function planHWGW(ns: NS, hacks: number, plan: Plan): Plan | null {
   if (weakensHack !== weakensHackWanted) {
     return null;
   }
-  txn.scripts.push(scriptHackWeaken);
 
-  const scriptGrow = Script.newGrow(plan);
+  const scriptGrow = txn.newGrow();
   let growsTotal = 0;
   for (
     let i = txn.hosts.length - 1;
@@ -510,9 +527,8 @@ export function planHWGW(ns: NS, hacks: number, plan: Plan): Plan | null {
   if (txn.target.moneyAvailable < txn.target.moneyMax) {
     return null;
   }
-  txn.scripts.push(scriptGrow);
 
-  const scriptGrowWeaken = Script.newWeaken(plan);
+  const scriptGrowWeaken = txn.newWeaken();
   const weakensGrowWanted = Math.ceil(WEAKENS_PER_GROW * growsTotal);
   const weakensGrow = scriptGrowWeaken.reserveThreadsFromStart(
     ns,
@@ -522,7 +538,6 @@ export function planHWGW(ns: NS, hacks: number, plan: Plan): Plan | null {
   if (weakensGrow !== weakensGrowWanted) {
     return null;
   }
-  txn.scripts.push(scriptGrowWeaken);
 
   txn.batches += 1;
   txn.addDebugString(
@@ -592,7 +607,7 @@ export function planPrep(ns: NS, plan: Plan): Plan {
   const securityWeakenInitial =
     txn.target.hackDifficulty - txn.target.minDifficulty;
   if (securityWeakenInitial > 0) {
-    const scriptWeaken = Script.newWeaken(plan);
+    const scriptWeaken = txn.newWeaken();
     const weakensWanted = Math.ceil(
       securityWeakenInitial / SECURITY_PER_WEAKEN,
     );
@@ -603,7 +618,6 @@ export function planPrep(ns: NS, plan: Plan): Plan {
       weakensWanted,
       txn.hosts,
     );
-    txn.scripts.push(scriptWeaken);
     txn.target.hackDifficulty -= SECURITY_PER_WEAKEN * weakens;
 
     txn.addDebugString(`${weakens} weaken`);
@@ -618,21 +632,19 @@ export function planPrep(ns: NS, plan: Plan): Plan {
       `ERROR "${txn.target.hostname}" < $1; if this repeats, stop the script.`,
     );
 
-    const scriptGrow = Script.newGrow(plan);
+    const scriptGrow = txn.newGrow();
     const grows = scriptGrow.reserveThreadsOnHost(
       ns,
       Number.POSITIVE_INFINITY,
       txn.hosts[txn.hosts.length - 1],
     );
-    txn.scripts.push(scriptGrow);
 
-    const scriptWeaken = Script.newWeaken(plan);
+    const scriptWeaken = txn.newWeaken();
     const weakens = scriptWeaken.reserveThreadsFromStart(
       ns,
       Math.ceil(grows * WEAKENS_PER_GROW),
       txn.hosts,
     );
-    txn.scripts.push(scriptWeaken);
 
     txn.addDebugString(`${grows} grow, ${weakens} weaken`);
     return txn.commit();
@@ -819,7 +831,7 @@ function suggestPorts(
 export class Script {
   readonly threads: ThreadReservation[] = [];
 
-  private constructor(readonly path: string, readonly duration: number) {}
+  constructor(readonly path: string, readonly duration: number) {}
 
   exec(ns: NS, target: Readonly<Server>, endMs: number, signalOnLast: boolean) {
     const delay = endMs - this.duration;
@@ -836,18 +848,6 @@ export class Script {
         `--target=${target.hostname}`,
       );
     }
-  }
-
-  static newGrow(plan: Plan) {
-    return new Script('grow.ts', plan.timeGrow);
-  }
-
-  static newHack(plan: Plan) {
-    return new Script('hack.ts', plan.timeHack);
-  }
-
-  static newWeaken(plan: Plan) {
-    return new Script('weaken.ts', plan.timeWeaken);
   }
 
   reserveThreadsFromStart(ns: NS, threadsWanted: number, hosts: Host[]) {
