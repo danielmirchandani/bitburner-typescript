@@ -260,7 +260,6 @@ export class Plan {
       this._hacks = -1;
       return;
     }
-    const ramToStart = this.getRamAvailable();
     const bestHost = this.hosts[this.hosts.length - 1];
     const worstHost = this.hosts[0];
 
@@ -275,16 +274,13 @@ export class Plan {
         grows * worstHost.getScriptRam(ns, 'grow.ts') +
         weakensGrow * bestHost.getScriptRam(ns, 'weaken.ts');
 
-      // Scripts don't pack 100% effectively, so arbitrarily say 50% of total
-      // host RAM is the threshold for too-big batches.
-      if (ramLowerBound > ramToStart / 2) {
-        continue;
-      }
-
       // All plans have the same wait, so we don't need to consider it.
       const moneyPossible = this.multiplierHack * i;
       const money = Math.min(moneyPossible, this.target.moneyAvailable);
-      const numBatches = Math.min(ramToStart / ramLowerBound, 100_000);
+      const numBatches = Math.min(
+        this.getRamAvailable() / ramLowerBound,
+        100_000,
+      );
       const efficiency = money * numBatches;
       if (efficiency <= bestEfficiency) {
         continue;
