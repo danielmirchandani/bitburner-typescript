@@ -495,10 +495,12 @@ interface PlanTransaction {
   newWeaken(): Script;
 }
 
-function planBase(ns: NS, player: Player): Plan {
-  const servers = scanServers(ns);
-  const hosts = rootServers(ns, player, servers);
-  const target = bestTarget(ns, player, servers);
+function planBase(
+  ns: NS,
+  player: Player,
+  hosts: Readonly<Host>[],
+  target: Required<Server>,
+): Plan {
   const plan = new Plan(
     player,
     hosts,
@@ -897,9 +899,12 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
   suggestPorts(ns, player, updateStatus);
   purchaseServers(ns, player, updateStatus);
 
-  const base = planBase(ns, player);
+  const servers = scanServers(ns);
+  const hosts = rootServers(ns, player, servers);
+  const target = bestTarget(ns, player, servers);
+  const base = planBase(ns, player, hosts, target);
   updateStatus('Target', base.target.hostname);
-  updateStatus('Hosts', base.hosts.length.toString());
+  updateStatus('Hosts', hosts.length.toString());
 
   const ramToStart = base.getRamAvailable();
   updateStatus('RAM free', ns.format.ram(ramToStart));
