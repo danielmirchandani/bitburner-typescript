@@ -207,11 +207,12 @@ export class Plan {
   private _awaits = 0;
   private _batches: number = 0;
   private _debugStrings = new Map<string, number>();
+  private _hacks: number = 0;
   private scripts: Readonly<Script>[][] = [];
 
   constructor(
     readonly player: Readonly<Player>,
-    private _hosts: Readonly<Host>[],
+    private hosts: Readonly<Host>[],
     private _target: Readonly<Required<Server>>,
     readonly multiplierHack: number,
     private timeGrow: number,
@@ -232,12 +233,65 @@ export class Plan {
     return this._debugStrings;
   }
 
-  get hosts():Readonly<Readonly<Host>[]> {
-    return this._hosts;
+  get hacks() {
+    return this._hacks;
   }
 
   get target() {
     return this._target;
+  }
+
+  /**
+   * Figure out the "ideal" number of hacks per HWGW batch.
+   *
+   * In reality, batches don't use the same RAM because, even for the same number
+   * of hacks, grows increase as the hosts they're split between increase. The
+   * slight loss in efficiency per batch (~10%) is more than made up for by
+   * planning _far_ more batches (10x for me) in the same amount of planning time.
+   */
+  calculateHacksPerBatch(ns: NS) {
+    // Any threads beyond this will have no money to steal, so efficiency only
+    // goes down after this.
+    const limit = Math.floor(1 / this.multiplierHack);
+    if (limit > 1_000_000) {
+      ns.tprint(
+        'WARNING Hacking would steal too little or no money; try weakening the target manually and restarting this script',
+      );
+      this._hacks = -1;
+      return;
+    }
+    const ramToStart = this.getRamAvailable();
+    const bestHost = this.hosts[this.hosts.length - 1];
+    const worstHost = this.hosts[0];
+
+    let bestEfficiency = 0;
+    for (let i = 1; i <= limit; ++i) {
+      const weakensHack = Math.ceil(WEAKENS_PER_HACK * i);
+      const grows = this.growThreads(ns, this.target, worstHost);
+      const weakensGrow = Math.ceil(WEAKENS_PER_GROW * grows);
+      const ramLowerBound =
+        i * bestHost.getScriptRam(ns, 'hack.ts') +
+        weakensHack * bestHost.getScriptRam(ns, 'weaken.ts') +
+        grows * worstHost.getScriptRam(ns, 'grow.ts') +
+        weakensGrow * bestHost.getScriptRam(ns, 'weaken.ts');
+
+      // Scripts don't pack 100% effectively, so arbitrarily say 50% of total
+      // host RAM is the threshold for too-big batches.
+      if (ramLowerBound > ramToStart / 2) {
+        continue;
+      }
+
+      // All plans have the same wait, so we don't need to consider it.
+      const moneyPossible = this.multiplierHack * i;
+      const money = Math.min(moneyPossible, this.target.moneyAvailable);
+      const numBatches = Math.min(ramToStart / ramLowerBound, 100_000);
+      const efficiency = money * numBatches;
+      if (efficiency <= bestEfficiency) {
+        continue;
+      }
+      bestEfficiency = efficiency;
+      this._hacks = i;
+    }
   }
 
   async exec(
@@ -399,7 +453,7 @@ export class Plan {
         this.debugStrings.forEach((value, key) => {
           dan.mapIncrement(this.plan._debugStrings, key, value);
         });
-        this.plan._hosts = this.hosts;
+        this.plan.hosts = this.hosts;
         this.plan.scripts.push(this.scripts);
         this.plan._target = this.target;
         return this.plan;
@@ -445,7 +499,7 @@ function planBase(ns: NS, player: Player): Plan {
   const servers = scanServers(ns);
   const hosts = rootServers(ns, player, servers);
   const target = bestTarget(ns, player, servers);
-  return new Plan(
+  const plan = new Plan(
     player,
     hosts,
     target,
@@ -455,6 +509,8 @@ function planBase(ns: NS, player: Player): Plan {
     ns.getWeakenTime(target.hostname),
     ns.fileExists('Formulas.exe'),
   );
+  plan.calculateHacksPerBatch(ns);
+  return plan;
 }
 
 function planGrow(ns: NS, grows: number, plan: Plan) {
@@ -548,61 +604,6 @@ export function planHWGW(ns: NS, hacks: number, plan: Plan): Plan | null {
     `${hacks} hack, ${weakensHack} weaken, ${growsTotal} grow, ${weakensGrow} weaken`,
   );
   return txn.commit();
-}
-
-/**
- * Figure out the "ideal" number of hacks per HWGW batch.
- *
- * In reality, batches don't use the same RAM because, even for the same number
- * of hacks, grows increase as the hosts they're split between increase. The
- * slight loss in efficiency per batch (~10%) is more than made up for by
- * planning _far_ more batches (10x for me) in the same amount of planning time.
- */
-function planHacksPerBatch(ns: NS, plan: Plan) {
-  // Any threads beyond this will have no money to steal, so efficiency only
-  // goes down after this.
-  const limit = Math.floor(1 / plan.multiplierHack);
-  if (limit > 1_000_000) {
-    ns.tprint(
-      'WARNING Hacking would steal too little or no money; try weakening the target manually and restarting this script',
-    );
-    return -1;
-  }
-  const ramToStart = plan.getRamAvailable();
-  const hosts = plan.hosts;
-  const bestHost = hosts[hosts.length - 1];
-  const worstHost = hosts[0];
-
-  let bestEfficiency = 0;
-  let bestHacks = -1;
-  for (let i = 1; i <= limit; ++i) {
-    const weakensHack = Math.ceil(WEAKENS_PER_HACK * i);
-    const grows = plan.growThreads(ns, plan.target, worstHost);
-    const weakensGrow = Math.ceil(WEAKENS_PER_GROW * grows);
-    const ramLowerBound =
-      i * bestHost.getScriptRam(ns, 'hack.ts') +
-      weakensHack * bestHost.getScriptRam(ns, 'weaken.ts') +
-      grows * worstHost.getScriptRam(ns, 'grow.ts') +
-      weakensGrow * bestHost.getScriptRam(ns, 'weaken.ts');
-
-    // Scripts don't pack 100% effectively, so arbitrarily say 50% of total
-    // host RAM is the threshold for too-big batches.
-    if (ramLowerBound > ramToStart / 2) {
-      continue;
-    }
-
-    // All plans have the same wait, so we don't need to consider it.
-    const moneyPossible = plan.multiplierHack * i;
-    const money = Math.min(moneyPossible, plan.target.moneyAvailable);
-    const numBatches = Math.min(ramToStart / ramLowerBound, 100_000);
-    const efficiency = money * numBatches;
-    if (efficiency <= bestEfficiency) {
-      continue;
-    }
-    bestEfficiency = efficiency;
-    bestHacks = i;
-  }
-  return bestHacks;
 }
 
 export function planPrep(ns: NS, plan: Plan): Plan {
@@ -904,9 +905,8 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
   updateStatus('RAM free', ns.format.ram(ramToStart));
 
   let plan = planPrep(ns, base);
-  const hacksPerBatch = planHacksPerBatch(ns, plan);
-  if (hacksPerBatch !== -1) {
-    ns.tprint(`INFO ${hacksPerBatch} hacks per batch`);
+  if (plan.hacks !== -1) {
+    ns.tprint(`INFO ${plan.hacks} hacks per batch`);
 
     const stopwatchBatch = new dan.Stopwatch();
     let lastSleep = performance.now();
@@ -916,7 +916,7 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
         await ns.asleep(0);
         lastSleep = performance.now();
       }
-      const maybePlan = planHWGW(ns, hacksPerBatch, plan);
+      const maybePlan = planHWGW(ns, plan.hacks, plan);
       // We're probably out of memory
       if (maybePlan === null) {
         break;
@@ -944,7 +944,7 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
 
   if (plan.hacks !== -1 && plan.batches > 0) {
     const moneyPerHack = plan.target.moneyMax * plan.multiplierHack;
-    const moneyPerPlan = moneyPerHack * hacksPerBatch * plan.batches;
+    const moneyPerPlan = moneyPerHack * plan.hacks * plan.batches;
     const moneyPerSec = (moneyPerPlan * 1000) / timeSleep;
     ns.tprint(`INFO $${ns.format.number(moneyPerSec)}/s`);
   }
