@@ -1,6 +1,7 @@
 import * as dan from './lib/dan.ts';
 import {PORTS} from './lib/server_ports.ts';
 
+const BATCH_LIMIT = 100_000;
 const SECURITY_PER_GROW = 0.004;
 const SECURITY_PER_HACK = 0.002;
 const SECURITY_PER_WEAKEN = 0.05;
@@ -281,7 +282,7 @@ export class Plan {
       const money = Math.min(moneyPossible, this.target.moneyAvailable);
       const numBatches = Math.min(
         this.getRamAvailable() / ramLowerBound,
-        100_000,
+        BATCH_LIMIT,
       );
       const efficiency = money * numBatches;
       if (efficiency <= bestEfficiency) {
@@ -913,7 +914,7 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
 
     const stopwatchBatch = new dan.Stopwatch();
     let lastSleep = performance.now();
-    while (plan.awaits < 1_000_000) {
+    while (plan.batches < BATCH_LIMIT) {
       if (performance.now() > lastSleep + 20) {
         updateStatus('Awaits', `${plan.awaits} (${stopwatchBatch.format(ns)})`);
         await ns.asleep(0);
