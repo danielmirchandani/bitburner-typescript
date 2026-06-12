@@ -111,7 +111,6 @@ export function exponentialSearch(
 
 export class Host {
   private constructor(
-    readonly server: Readonly<Required<Server>>,
     readonly cpuCores: number,
     readonly hostname: string,
     public ramAvailable: number,
@@ -120,7 +119,6 @@ export class Host {
 
   copy() {
     return new Host(
-      this.server,
       this.cpuCores,
       this.hostname,
       this.ramAvailable,
@@ -130,9 +128,8 @@ export class Host {
     );
   }
 
-  static fromServer(ns: NS, server: Required<Server>) {
+  static fromServer(ns: NS, server: Server) {
     return new Host(
-      server,
       server.cpuCores,
       server.hostname,
       server.hostname === 'home'
@@ -159,7 +156,7 @@ export class Host {
 
 export function growPercentSearch(
   ns: NS,
-  target: Required<Server>,
+  target: Readonly<Target>,
   host: Readonly<Host>,
   threads: number,
 ) {
@@ -214,7 +211,7 @@ export class Plan {
   constructor(
     readonly player: Readonly<Player>,
     private hosts: Readonly<Host>[],
-    private _target: Readonly<Required<Server>>,
+    private _target: Readonly<Target>,
     readonly multiplierHack: number,
     private timeGrow: number,
     private timeHack: number,
@@ -388,7 +385,7 @@ export class Plan {
 
   growAmount(
     ns: NS,
-    target: Readonly<Required<Server>>,
+    target: Readonly<Target>,
     grows: number,
     host: Readonly<Host>,
   ) {
@@ -407,11 +404,7 @@ export class Plan {
     }
   }
 
-  growThreads(
-    ns: NS,
-    target: Readonly<Required<Server>>,
-    host: Readonly<Host>,
-  ) {
+  growThreads(ns: NS, target: Readonly<Target>, host: Readonly<Host>) {
     if (this.hasFormulas) {
       return ns.formulas.hacking.growThreads(
         target,
@@ -485,7 +478,7 @@ interface PlanTransaction {
   hosts: Host[];
   plan: Plan;
   scripts: Script[];
-  target: Required<Server>;
+  target: Target;
 
   addDebugString(key: string): void;
   commit(): Plan;
@@ -498,7 +491,7 @@ function planBase(
   ns: NS,
   player: Player,
   hosts: Readonly<Host>[],
-  target: Required<Server>,
+  target: Readonly<Target>,
 ): Plan {
   const plan = new Plan(
     player,
@@ -722,7 +715,7 @@ function purchaseServers(
   updateStatus('Cloud RAM', `${ns.format.ram(max)} (MAX)`);
 }
 
-function rootServers(ns: NS, player: Player, servers: Required<Server>[]) {
+function rootServers(ns: NS, player: Player, servers: Server[]) {
   const files = ['grow.ts', 'hack.ts', 'lib/dan.ts', 'share.ts', 'weaken.ts'];
   const hosts: Host[] = [];
   for (const server of servers) {
@@ -733,12 +726,18 @@ function rootServers(ns: NS, player: Player, servers: Required<Server>[]) {
     // even though the required number of ports aren't open (and might not be
     // able to for a while).
     if (!server.hasAdminRights) {
-      if (server.numOpenPortsRequired >= PORTS.length) {
+      if (
+        server.numOpenPortsRequired === undefined ||
+        server.numOpenPortsRequired >= PORTS.length
+      ) {
         throw new Error(
           `"${server.hostname}" requires ${server.numOpenPortsRequired} open ports`,
         );
       }
-      if (server.requiredHackingSkill > player.skills.hacking) {
+      if (
+        server.requiredHackingSkill === undefined ||
+        server.requiredHackingSkill > player.skills.hacking
+      ) {
         continue;
       }
       let anyClosed = false;
@@ -770,43 +769,16 @@ function rootServers(ns: NS, player: Player, servers: Required<Server>[]) {
   });
 }
 
-function scanServers(ns: NS) {
+function scanServers(ns: NS): Server[] {
   const hostnamesToScan = ['home'];
   const hostnamesScanned = new Set<string>();
-  const servers: Required<Server>[] = [];
+  const servers = [];
   for (const hostname of hostnamesToScan) {
     hostnamesToScan.push(
       ...ns.scan(hostname).filter(next => !hostnamesScanned.has(next)),
     );
     hostnamesScanned.add(hostname);
-    const server = ns.getServer(hostname);
-    if (
-      server.backdoorInstalled === undefined ||
-      server.baseDifficulty === undefined ||
-      server.hackDifficulty === undefined ||
-      server.minDifficulty === undefined ||
-      server.moneyAvailable === undefined ||
-      server.moneyMax === undefined ||
-      server.numOpenPortsRequired === undefined ||
-      server.openPortCount === undefined ||
-      server.requiredHackingSkill === undefined ||
-      server.serverGrowth === undefined
-    ) {
-      throw new Error(`${server.hostname} target properties not defined`);
-    }
-    servers.push({
-      backdoorInstalled: server.backdoorInstalled,
-      baseDifficulty: server.baseDifficulty,
-      hackDifficulty: server.hackDifficulty,
-      minDifficulty: server.minDifficulty,
-      moneyAvailable: server.moneyAvailable,
-      moneyMax: server.moneyMax,
-      numOpenPortsRequired: server.numOpenPortsRequired,
-      openPortCount: server.openPortCount,
-      requiredHackingSkill: server.requiredHackingSkill,
-      serverGrowth: server.serverGrowth,
-      ...server,
-    });
+    servers.push(ns.getServer(hostname));
   }
   return servers;
 }
@@ -877,6 +849,14 @@ export class Script {
     return threads;
   }
 }
+
+type Target = Server & {
+  hackDifficulty: number;
+  minDifficulty: number;
+  moneyAvailable: number;
+  moneyMax: number;
+  requiredHackingSkill: number;
+};
 
 type ThreadReservation = {
   readonly host: Readonly<Host>;
