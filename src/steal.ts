@@ -109,6 +109,36 @@ export function exponentialSearch(
   return current;
 }
 
+function hackMultiplier(
+  ns: NS,
+  player: Readonly<Player>,
+  target: Readonly<Target>,
+  formulas: boolean,
+) {
+  if (formulas) {
+    const scratch: Server = {...target, hackDifficulty: target.minDifficulty};
+    return (
+      ns.formulas.hacking.hackChance(scratch, player) *
+      ns.formulas.hacking.hackPercent(scratch, player)
+    );
+  } else {
+    const chance =
+      // ease
+      (1 - target.minDifficulty / 100) *
+      // skill
+      (1 - target.requiredHackingSkill / player.skills.hacking / 1.75) *
+      player.mults.hacking_chance;
+    const percent =
+      // ease
+      (1 - target.minDifficulty / 100) *
+      // skill
+      (1 - (target.requiredHackingSkill - 1) / player.skills.hacking) *
+      player.mults.hacking_money *
+      (1 / 240);
+    return chance * percent;
+  }
+}
+
 export class Host {
   private constructor(
     readonly cpuCores: number,
@@ -493,15 +523,16 @@ function planBase(
   hosts: Readonly<Host>[],
   target: Readonly<Target>,
 ): Plan {
+  const formulas = ns.fileExists('Formulas.exe');
   const plan = new Plan(
     player,
     hosts,
     target,
-    ns.hackAnalyze(target.hostname),
+    hackMultiplier(ns, player, target, formulas),
     ns.getGrowTime(target.hostname),
     ns.getHackTime(target.hostname),
     ns.getWeakenTime(target.hostname),
-    ns.fileExists('Formulas.exe'),
+    formulas,
   );
   plan.calculateHacksPerBatch(ns);
   return plan;
