@@ -305,8 +305,8 @@ export class Plan {
         weakensGrow * worstHost.getScriptRam(ns, 'weaken.ts');
 
       // All plans have the same wait, so we don't need to consider it.
-      const moneyPossible = this.multiplierHack * i;
-      const money = Math.min(moneyPossible, this.target.moneyAvailable);
+      const moneyPossible = this.multiplierHack * i * this.target.moneyMax;
+      const money = Math.min(moneyPossible, this.target.moneyMax);
       const numBatches = Math.min(
         this.getRamAvailable() / ramLowerBound,
         BATCH_LIMIT,
