@@ -163,7 +163,7 @@ export class Plan {
 
   constructor(
     readonly player: Readonly<Player>,
-    private hosts: Readonly<Host>[],
+    private hosts: Readonly<Readonly<Host>[]>,
     private _target: Readonly<Target>,
     readonly multiplierHack: number,
     private timeGrow: number,
@@ -448,8 +448,8 @@ interface PlanTransaction {
 
 function planBase(
   ns: NS,
-  player: Player,
-  hosts: Readonly<Host>[],
+  player: Readonly<Player>,
+  hosts: Readonly<Readonly<Host>[]>,
   target: Readonly<Target>,
 ): Plan {
   const formulas = ns.fileExists('Formulas.exe');
