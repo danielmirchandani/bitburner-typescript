@@ -8,84 +8,6 @@ const SECURITY_PER_WEAKEN = 0.05;
 const WEAKENS_PER_GROW = SECURITY_PER_GROW / SECURITY_PER_WEAKEN;
 const WEAKENS_PER_HACK = SECURITY_PER_HACK / SECURITY_PER_WEAKEN;
 
-function bestTarget(ns: NS, player: Player, servers: Required<Server>[]) {
-  const hasFormulas = ns.fileExists('Formulas.exe');
-
-  let bestEfficiency = 0;
-  let bestTarget = null;
-  for (const target of servers) {
-    if (!target.hasAdminRights) {
-      continue;
-    }
-    if (target.moneyMax === 0) {
-      continue;
-    }
-
-    // TODO: what hostname should these use?
-    const ramPerGrow = ns.getScriptRam('grow.ts', target.hostname);
-    const ramPerHack = ns.getScriptRam('hack.ts', target.hostname);
-    const ramPerWeaken = ns.getScriptRam('weaken.ts', target.hostname);
-
-    // These are as if the server is fully grown and weakened.
-    let chance;
-    let grows;
-    let percent: number;
-    let time: number;
-    if (hasFormulas) {
-      const scratch = {...target};
-      scratch.hackDifficulty = target.minDifficulty;
-      scratch.moneyAvailable = target.moneyMax;
-      chance = ns.formulas.hacking.hackChance(scratch, player);
-      percent = ns.formulas.hacking.hackPercent(scratch, player);
-      time = Math.max(
-        ns.formulas.hacking.growTime(scratch, player),
-        ns.formulas.hacking.hackTime(scratch, player),
-        ns.formulas.hacking.weakenTime(scratch, player),
-      );
-    } else {
-      // These aren't anywhere close to the right values, but
-      // they're in the right ballpark long enough to get access
-      // to Formulas.exe.
-      chance = 1 / target.requiredHackingSkill;
-      percent = target.minDifficulty;
-      time = target.minDifficulty;
-    }
-    // Reduction of:
-    // target.moneyMax / (percent * target.moneyMax * chance);
-    const hacks = 1 / (percent * chance);
-    if (hasFormulas) {
-      const scratch = {...target};
-      scratch.hackDifficulty = target.minDifficulty;
-      scratch.moneyAvailable = 0;
-      grows = ns.formulas.hacking.growThreads(scratch, player, target.moneyMax);
-    } else {
-      grows = hacks / target.serverGrowth;
-    }
-    // money/s = batches * money/batch / s/batch
-    // batches = RAM / RAM/batch
-    // money/batch = server.moneyMax
-    // s/batch = max(s/hack, s/weaken, s/grow)
-    // RAM/batch =
-    //     hacks * RAM/hack + grows * RAM/grow + weakens * RAM/weaken
-    // hacks = server.moneyMax / ($/hack * chance)
-    // grows ???= hacks / server.serverGrowth
-    // weakens = hacks * WEAKENS_PER_HACK + grows * WEAKENS_PER_GROW
-    const weakens =
-      Math.ceil(hacks * WEAKENS_PER_HACK) + Math.ceil(grows * WEAKENS_PER_GROW);
-    const ramPerBatch =
-      hacks * ramPerHack + grows * ramPerGrow + weakens * ramPerWeaken;
-    const efficiency = target.moneyMax / (ramPerBatch * time);
-    if (efficiency > bestEfficiency) {
-      bestEfficiency = efficiency;
-      bestTarget = target;
-    }
-  }
-  if (bestTarget === null) {
-    throw new Error('Could not find best target');
-  }
-  return bestTarget;
-}
-
 export function exponentialSearch(
   start: number,
   predicate: (_: number) => boolean,
@@ -235,6 +157,7 @@ export class Plan {
   private _awaits = 0;
   private _batches: number = 0;
   private _debugStrings = new Map<string, number>();
+  private _efficiency: number = 0;
   private _hacks: number = 0;
   private scripts: Readonly<Script>[][] = [];
 
@@ -259,6 +182,13 @@ export class Plan {
 
   get debugStrings(): ReadonlyMap<string, number> {
     return this._debugStrings;
+  }
+
+  /**
+   * $/s of this plan using as much RAM as possible.
+   */
+  get efficiency() {
+    return this._efficiency;
   }
 
   get hacks() {
@@ -289,9 +219,9 @@ export class Plan {
       return;
     }
 
+    const maxTime = Math.max(this.timeGrow, this.timeHack, this.timeWeaken);
     const worstHost = this.hosts[0];
 
-    let bestEfficiency = 0;
     for (let i = 1; i <= limit; ++i) {
       const weakensHack = Math.ceil(WEAKENS_PER_HACK * i);
       const grows = this.growThreads(ns, this.target, worstHost);
@@ -304,18 +234,17 @@ export class Plan {
         grows * worstHost.getScriptRam(ns, 'grow.ts') +
         weakensGrow * worstHost.getScriptRam(ns, 'weaken.ts');
 
-      // All plans have the same wait, so we don't need to consider it.
       const moneyPossible = this.multiplierHack * i * this.target.moneyMax;
       const money = Math.min(moneyPossible, this.target.moneyMax);
       const numBatches = Math.min(
         this.getRamAvailable() / ramLowerBound,
         BATCH_LIMIT,
       );
-      const efficiency = money * numBatches;
-      if (efficiency <= bestEfficiency) {
+      const efficiency = (money * numBatches) / maxTime;
+      if (efficiency <= this._efficiency) {
         continue;
       }
-      bestEfficiency = efficiency;
+      this._efficiency = efficiency;
       this._hacks = i;
     }
   }
@@ -911,8 +840,18 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
 
   const servers = scanServers(ns);
   const hosts = rootServers(ns, player, servers);
-  const target = bestTarget(ns, player, servers);
-  const base = planBase(ns, player, hosts, target);
+  const plans = servers
+    .filter(
+      (server): server is Target =>
+        server.hackDifficulty !== undefined &&
+        server.minDifficulty !== undefined &&
+        server.moneyAvailable !== undefined &&
+        server.moneyMax !== undefined &&
+        server.requiredHackingSkill !== undefined,
+    )
+    .map(target => planBase(ns, player, hosts, target))
+    .sort((a, b) => b.efficiency - a.efficiency);
+  const base = plans[0];
   updateStatus('Target', base.target.hostname);
   updateStatus('Hosts', hosts.length.toString());
 
