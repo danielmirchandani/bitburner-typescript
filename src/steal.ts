@@ -455,8 +455,8 @@ function planBase(
   player: Readonly<Player>,
   hosts: Readonly<Readonly<Host>[]>,
   target: Readonly<Target>,
+  formulas: boolean,
 ): Plan {
-  const formulas = ns.fileExists('Formulas.exe');
   const plan = new Plan(
     player,
     hosts,
@@ -838,6 +838,7 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
 
   ns.tprint('INFO ---');
 
+  const formulas = ns.fileExists('Formulas.exe');
   const player = ns.getPlayer();
   suggestPorts(ns, player, updateStatus);
   purchaseServers(ns, player, updateStatus);
@@ -853,7 +854,7 @@ async function iteration(ns: NS, flags: dan.Flags, server: dan.SignalServer) {
         server.moneyMax !== undefined &&
         server.requiredHackingSkill !== undefined,
     )
-    .map(target => planBase(ns, player, hosts, target))
+    .map(target => planBase(ns, player, hosts, target, formulas))
     .sort((a, b) => b.efficiency - a.efficiency);
   const base = plans[0];
   updateStatus('Target', base.target.hostname);
