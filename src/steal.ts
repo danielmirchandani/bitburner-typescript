@@ -163,7 +163,7 @@ export class Plan {
 
   constructor(
     readonly player: Readonly<Player>,
-    private hosts: Readonly<Readonly<Host>[]>,
+    private _hosts: Readonly<Readonly<Host>[]>,
     private _target: Readonly<Target>,
     readonly multiplierHack: number,
     private timeGrow: number,
@@ -193,6 +193,10 @@ export class Plan {
 
   get hacks() {
     return this._hacks;
+  }
+
+  get hosts(): Readonly<Readonly<Host>[]> {
+    return this._hosts;
   }
 
   get target() {
@@ -404,7 +408,7 @@ export class Plan {
         this.debugStrings.forEach((value, key) => {
           dan.mapIncrement(this.plan._debugStrings, key, value);
         });
-        this.plan.hosts = this.hosts;
+        this.plan._hosts = this.hosts;
         this.plan.scripts.push(this.scripts);
         this.plan._target = this.target;
         return this.plan;
